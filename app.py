@@ -2,7 +2,7 @@ import sys
 from PyQt5.QtCore import * 
 from PyQt5.QtGui import * 
 from PyQt5.QtWidgets import *
-from controller import get_spotify_client
+from auth import get_spotify_client
 import requests
 
 class SpotifyApp(QWidget):
@@ -22,14 +22,16 @@ class SpotifyApp(QWidget):
         self.song_label = QLabel("Song: Loading...")
         self.stats_label = QLabel("Stats: Loading...")
         self.layout.addWidget(self.song_label)
+        self.layout.setAlignment(self.song_label, Qt.AlignCenter)
         self.layout.addWidget(self.stats_label)
+        self.layout.setAlignment(self.stats_label, Qt.AlignCenter)
         self.setLayout(self.layout)
         # Spotify Client
         self.spotify = get_spotify_client()
         # Timer to update song info
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_song_info)
-        self.timer.start(2500)  # Check every 2.5 seconds
+        self.timer.start(1000)  # Check every second
         self.update_song_info()  # Initial fetch
 
     def update_song_info(self):
@@ -55,14 +57,15 @@ class SpotifyApp(QWidget):
                     # Update existing album cover
                     pixmap = QPixmap()
                     pixmap.loadFromData(requests.get(album_cover_url).content)
-                    self.album_cover.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio))
+                    self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio))
                 else:
                     # Create new album cover QLabel
                     self.album_cover = QLabel()
                     pixmap = QPixmap()
                     pixmap.loadFromData(requests.get(album_cover_url).content)
-                    self.album_cover.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio))
+                    self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio))
                     self.layout.addWidget(self.album_cover)
+                self.layout.setAlignment(self.album_cover, Qt.AlignCenter)
             # Remove song data if no song is playing
             else:
                 self.song_label.setText("No song is currently playing.")
