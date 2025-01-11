@@ -40,12 +40,11 @@ class SpotifyApp(QWidget):
         self.song_label = QLabel("Song: Loading...")
         self.stats_label = QLabel("Stats: Loading...")
 
+        title_font_id = QFontDatabase.addApplicationFont("KdamThmorPro-Regular.ttf")
+        font_families = QFontDatabase.applicationFontFamilies(title_font_id)
+        iceberg_font = QFont(font_families[0], 30)
+        self.title_label.setFont(iceberg_font)
         self.title_label.setStyleSheet("color: #FFFFFF;")
-        font_id = QFontDatabase.addApplicationFont("KdamThmorPro-Regular.ttf")
-        font_families = QFontDatabase.applicationFontFamilies(font_id)
-        if font_families:
-            iceberg_font = QFont(font_families[0], 30)
-            self.title_label.setFont(iceberg_font)
         self.song_label.setStyleSheet("color: #FFFFFF;")
         self.stats_label.setStyleSheet("color: #FFFFFF;")
 
@@ -76,7 +75,7 @@ class SpotifyApp(QWidget):
         # Timer to update song info
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_song_info)
-        self.timer.start(1000)  # Check every second
+        self.timer.start(1000)
         self.update_song_info()  # Initial fetch
 
     def update_song_info(self):
@@ -97,8 +96,8 @@ class SpotifyApp(QWidget):
                 # Update labels
                 self.song_label.setText(f"Song: {track_name} by {artist}")
                 self.song_label.setWordWrap(True)
-                max_width = int(self.width() * 0.75)
-                self.song_label.setMaximumWidth(max_width)
+                max_title_width = int(self.width() * 0.75)
+                self.song_label.setMaximumWidth(max_title_width)
                 self.update_album_cover(track)
             # Remove song data if no song is playing
             else:
