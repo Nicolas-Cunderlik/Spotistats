@@ -2,6 +2,7 @@ import sys
 from PyQt5.QtCore import * 
 from PyQt5.QtGui import * 
 from PyQt5.QtWidgets import *
+import pywinstyles.py_win_style
 from auth import get_spotify_client
 import requests
 
@@ -14,17 +15,32 @@ class SpotifyApp(QWidget):
         the song information every 2.5 seconds.
         """
         super().__init__()
-        self.setWindowTitle("Spotify Song Stats")
-        self.setGeometry(200, 200, 500, 300)
+        self.setWindowTitle("Spotistats")
+        
         self.setWindowIcon(QIcon('SpotifyAppLogo.png'))
+        self.setGeometry(100, 100, 400, 800)
+        self.setStyleSheet("background-color: #000000;")
         # Layout and widgets
         self.layout = QVBoxLayout()
+
+        self.top_frame = QFrame()
+
+        self.title_frame = QFrame()
+        self.title_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
+        self.title_frame.setContentsMargins(20, 20, 20, 20)
+        self.label_layout = QVBoxLayout()
+
         self.song_label = QLabel("Song: Loading...")
         self.stats_label = QLabel("Stats: Loading...")
-        self.layout.addWidget(self.song_label)
-        self.layout.setAlignment(self.song_label, Qt.AlignCenter)
-        self.layout.addWidget(self.stats_label)
-        self.layout.setAlignment(self.stats_label, Qt.AlignCenter)
+        self.song_label.setStyleSheet("color: #FFFFFF;")
+        self.stats_label.setStyleSheet("color: #FFFFFF;")
+
+        self.label_layout.addWidget(self.song_label)
+        self.label_layout.addWidget(self.stats_label)
+        self.title_frame.setLayout(self.label_layout)
+
+        self.layout.addWidget(self.title_frame)
+
         self.setLayout(self.layout)
         # Spotify Client
         self.spotify = get_spotify_client()
@@ -82,5 +98,6 @@ class SpotifyApp(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = SpotifyApp()
+    pywinstyles.apply_style(window, "dark")
     window.show()
     sys.exit(app.exec_())
