@@ -23,23 +23,37 @@ class SpotifyApp(QWidget):
         # Layout and widgets
         self.layout = QVBoxLayout()
 
-        self.top_frame = QFrame()
+        self.stats_frame = QFrame()
+        self.stats_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
+        self.stats_frame.setContentsMargins(20, 20, 20, 20)
 
-        self.title_frame = QFrame()
-        self.title_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
-        self.title_frame.setContentsMargins(20, 20, 20, 20)
-        self.label_layout = QVBoxLayout()
+        self.album_cover_frame = QFrame()
+        self.album_cover_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
+        self.album_cover_frame.setContentsMargins(20, 20, 20, 20)
+        
+        self.stats_layout = QVBoxLayout()
+        self.album_cover_layout = QVBoxLayout()
 
         self.song_label = QLabel("Song: Loading...")
         self.stats_label = QLabel("Stats: Loading...")
         self.song_label.setStyleSheet("color: #FFFFFF;")
         self.stats_label.setStyleSheet("color: #FFFFFF;")
 
-        self.label_layout.addWidget(self.song_label)
-        self.label_layout.addWidget(self.stats_label)
-        self.title_frame.setLayout(self.label_layout)
+        self.stats_layout.addWidget(self.song_label)
+        self.stats_layout.addWidget(self.stats_label)
 
-        self.layout.addWidget(self.title_frame)
+        self.album_cover = QLabel()
+        self.album_cover.setPixmap(QPixmap(260, 260))
+
+        self.album_cover_layout.addWidget(self.album_cover)
+        self.album_cover_layout.setAlignment(self.album_cover, Qt.AlignCenter)
+
+        self.stats_frame.setLayout(self.stats_layout)
+        self.album_cover_frame.setLayout(self.album_cover_layout)
+
+        self.layout.addWidget(self.stats_frame)
+        self.layout.addSpacing(6)
+        self.layout.addWidget(self.album_cover_frame)
 
         self.setLayout(self.layout)
         # Spotify Client
@@ -57,7 +71,7 @@ class SpotifyApp(QWidget):
         playing, or if there is an error fetching the song info, updates
         the labels with an appropriate message.
 
-        This function is called every 2.5 seconds using a QTimer.
+        This function is called every second using a QTimer.
         """
         try:
             current_track = self.spotify.current_playback()
@@ -67,32 +81,30 @@ class SpotifyApp(QWidget):
                 artist = ", ".join(artist['name'] for artist in track['artists'])
                 # Update labels
                 self.song_label.setText(f"Song: {track_name} by {artist}")
-                # Fetch album cover
-                album_cover_url = track['album']['images'][0]['url']
-                if hasattr(self, 'album_cover'):
-                    # Update existing album cover
-                    pixmap = QPixmap()
-                    pixmap.loadFromData(requests.get(album_cover_url).content)
-                    self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio))
-                else:
-                    # Create new album cover QLabel
-                    self.album_cover = QLabel()
-                    pixmap = QPixmap()
-                    pixmap.loadFromData(requests.get(album_cover_url).content)
-                    self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio))
-                    self.layout.addWidget(self.album_cover)
-                self.layout.setAlignment(self.album_cover, Qt.AlignCenter)
+                self.song_label.setWordWrap(True)
+                max_width = int(self.width() * 0.75)
+                self.song_label.setMaximumWidth(max_width)
+                self.update_album_cover(track)
             # Remove song data if no song is playing
             else:
                 self.song_label.setText("No song is currently playing.")
-                self.stats_label.setText("")
+                self.stats_label.setText("No stats are available if no song is playing.")
                 if hasattr(self, 'album_cover'):
-                    self.layout.removeWidget(self.album_cover)
-                    self.album_cover.deleteLater()
-                    del self.album_cover
+                    self.album_cover.setVisible(False)
         except Exception as e:
             self.song_label.setText("Error fetching song info.")
             self.stats_label.setText(str(e))
+
+    def update_album_cover(self, track):
+        """
+        Updates the album cover whenever update_song_info is called. TODO: make this a separate thread
+        """
+        # Fetch album cover
+        album_cover_url = track['album']['images'][0]['url']
+        pixmap = QPixmap()
+        pixmap.loadFromData(requests.get(album_cover_url).content)
+        self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio))
+        self.album_cover.setVisible(True)
 
 # Main application loop
 if __name__ == "__main__":
