@@ -1,5 +1,3 @@
-# TODO: update this and model to have this do the manipulation
-
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 

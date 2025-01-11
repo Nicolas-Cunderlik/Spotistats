@@ -23,34 +23,49 @@ class SpotifyApp(QWidget):
         # Layout and widgets
         self.layout = QVBoxLayout()
 
+        self.title_frame = QFrame()
+        self.title_frame.setFixedHeight(100)
         self.stats_frame = QFrame()
-        self.stats_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
-        self.stats_frame.setContentsMargins(20, 20, 20, 20)
-
         self.album_cover_frame = QFrame()
+
+        self.title_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
+        self.stats_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
         self.album_cover_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
-        self.album_cover_frame.setContentsMargins(20, 20, 20, 20)
         
+        self.title_layout = QVBoxLayout()
         self.stats_layout = QVBoxLayout()
         self.album_cover_layout = QVBoxLayout()
 
+        self.title_label = QLabel("SPOTISTATS")
         self.song_label = QLabel("Song: Loading...")
         self.stats_label = QLabel("Stats: Loading...")
+
+        self.title_label.setStyleSheet("color: #FFFFFF;")
+        font_id = QFontDatabase.addApplicationFont("KdamThmorPro-Regular.ttf")
+        font_families = QFontDatabase.applicationFontFamilies(font_id)
+        if font_families:
+            iceberg_font = QFont(font_families[0], 30)
+            self.title_label.setFont(iceberg_font)
         self.song_label.setStyleSheet("color: #FFFFFF;")
         self.stats_label.setStyleSheet("color: #FFFFFF;")
 
+        self.title_layout.addWidget(self.title_label)
         self.stats_layout.addWidget(self.song_label)
         self.stats_layout.addWidget(self.stats_label)
 
         self.album_cover = QLabel()
         self.album_cover.setPixmap(QPixmap(260, 260))
 
+        self.title_layout.setAlignment(Qt.AlignCenter)
         self.album_cover_layout.addWidget(self.album_cover)
         self.album_cover_layout.setAlignment(self.album_cover, Qt.AlignCenter)
 
+        self.title_frame.setLayout(self.title_layout)
         self.stats_frame.setLayout(self.stats_layout)
         self.album_cover_frame.setLayout(self.album_cover_layout)
 
+        self.layout.addWidget(self.title_frame)
+        self.layout.addSpacing(6)
         self.layout.addWidget(self.stats_frame)
         self.layout.addSpacing(6)
         self.layout.addWidget(self.album_cover_frame)
