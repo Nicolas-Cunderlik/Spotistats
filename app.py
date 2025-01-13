@@ -1,9 +1,10 @@
 import sys
+from openai import openAI
 from PyQt5.QtCore import * 
 from PyQt5.QtGui import * 
 from PyQt5.QtWidgets import *
 import pywinstyles.py_win_style
-from auth import get_spotify_client
+from auth import *
 import requests
 
 class SpotifyApp(QWidget):
@@ -12,14 +13,16 @@ class SpotifyApp(QWidget):
         Initializes the SpotifyApp window with title and geometry settings, 
         sets up the layout and widgets for displaying song information and stats, 
         initializes the Spotify client, and starts a timer to periodically update 
-        the song information every 2.5 seconds.
+        the song information every 2 seconds.
         """
+
         super().__init__()
+
         self.setWindowTitle("Spotistats")
-        
         self.setWindowIcon(QIcon('SpotifyAppLogo.png'))
         self.setGeometry(100, 100, 400, 800)
         self.setStyleSheet("background-color: #000000;")
+
         # Layout and widgets
         self.layout = QVBoxLayout()
 
@@ -44,6 +47,7 @@ class SpotifyApp(QWidget):
         font_families = QFontDatabase.applicationFontFamilies(title_font_id)
         iceberg_font = QFont(font_families[0], 30)
         self.title_label.setFont(iceberg_font)
+
         self.title_label.setStyleSheet("color: #FFFFFF;")
         self.song_label.setStyleSheet("color: #FFFFFF;")
         self.stats_label.setStyleSheet("color: #FFFFFF;")
@@ -52,7 +56,7 @@ class SpotifyApp(QWidget):
         self.stats_layout.addWidget(self.song_label)
         self.stats_layout.addWidget(self.stats_label)
 
-        self.album_cover = QLabel()
+        self.album_cover = QLabel() # FIXME: make this image scale
         self.album_cover.setPixmap(QPixmap(260, 260))
 
         self.title_layout.setAlignment(Qt.AlignCenter)
@@ -70,8 +74,11 @@ class SpotifyApp(QWidget):
         self.layout.addWidget(self.album_cover_frame)
 
         self.setLayout(self.layout)
-        # Spotify Client
+
+        # Necessary clients
         self.spotify = get_spotify_client()
+        self.openai = get_openai_client()
+
         # Timer to update song info
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_song_info)
@@ -117,8 +124,15 @@ class SpotifyApp(QWidget):
         album_cover_url = track['album']['images'][0]['url']
         pixmap = QPixmap()
         pixmap.loadFromData(requests.get(album_cover_url).content)
-        self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio))
+        self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.album_cover.setVisible(True)
+
+    def update_stats(self, track):
+        """
+        Updates the stats label with an AI overview of the song's tempo and bpm.
+        """
+
+
 
 # Main application loop
 if __name__ == "__main__":
