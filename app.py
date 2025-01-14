@@ -90,7 +90,7 @@ class SpotifyApp(QWidget):
         if not self.spotify or not self.openai or not self.track_changed():
             return
         try:
-            current_track = self.get_playback_state()
+            current_track = self.get_current_playback()
             if self.track_playing():
                 print("Updating song info...")
                 track = current_track['item']
@@ -148,7 +148,7 @@ class SpotifyApp(QWidget):
         Updates the status of the song playing.
         """
         if self.track_playing():
-            current_track = self.get_playback_state()
+            current_track = self.get_current_playback()
             self.last_song_id = current_track['item']['id']
             self.song_playing = True
         else:
@@ -159,7 +159,7 @@ class SpotifyApp(QWidget):
         """
         Returns True if a track is currently playing, False otherwise.
         """
-        current_track = self.get_playback_state()
+        current_track = self.get_current_playback()
         return current_track and current_track['is_playing']
     
     def track_changed(self):
@@ -169,21 +169,21 @@ class SpotifyApp(QWidget):
         Returns:
             True if the playback state has changed, False otherwise.
         """
-        current_track = self.get_playback_state()
+        current_track = self.get_current_playback()
         if current_track and current_track['is_playing'] != self.song_playing:
             return True
         else:
             current_song_id = current_track['item']['id']
             return current_song_id != self.last_song_id
         
-    def get_playback_state(self):
+    def get_current_playback(self):
         """
         Returns the current playback state of the Spotify client.
 
         Returns:
             The current playback state of the Spotify client.
         """
-        return get_spotify_client().current_playback()
+        return self.spotify.current_playback()
     
     def run(self):
         """
