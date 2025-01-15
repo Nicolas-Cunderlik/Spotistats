@@ -98,7 +98,7 @@ class SpotifyApp(QWidget):
                 track = current_track['item']
                 self.update_song_label_spotify(track)
                 self.update_album_cover_label_spotify(track)
-                self.update_stats_label_openAI(track)
+                self.update_stats_label_bs4(track)
             # Remove song data if no song is playing
             else:
                 self.song_label.setText("No song is currently playing.")
@@ -107,7 +107,7 @@ class SpotifyApp(QWidget):
                     self.album_cover.setVisible(False)
             self.update_status()
         except Exception as e:
-            self.song_label.setText("Error fetching song info.")
+            self.song_label.setText(str(e))
 
     def update_song_label_spotify(self, track):
         """
@@ -131,7 +131,7 @@ class SpotifyApp(QWidget):
         self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.album_cover.setVisible(True)
 
-    def update_stats_label_openAI(self, track):
+    def update_stats_label_bs4(self, track):
         """
         Updates the stats label with an AI overview of the song's tempo and bpm.
         """
@@ -145,7 +145,8 @@ class SpotifyApp(QWidget):
         #)
         #self.stats_label.setText(response.choices[0].message.content)
         #current_song_id = track['id']
-        song_data = get_tunebat_data(current_song_id)
+        #song_data = get_tunebat_data(current_song_id)
+        get_tunebat_data(track['id'])
         #self.stats_label.setText()
 
     def update_status(self):
@@ -177,9 +178,11 @@ class SpotifyApp(QWidget):
         current_track = self.get_current_playback()
         if current_track and current_track['is_playing'] != self.song_playing:
             return True
-        else:
+        elif current_track:
             current_song_id = current_track['item']['id']
             return current_song_id != self.last_song_id
+        else:
+            return False
         
     def get_current_playback(self):
         """
