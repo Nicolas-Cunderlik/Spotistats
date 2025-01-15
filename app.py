@@ -3,8 +3,10 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import * 
 from PyQt5.QtWidgets import *
 import pywinstyles.py_win_style
-from auth import *
 import requests
+
+from auth import *
+from webscraper import *
 
 class SpotifyApp(QWidget):
     def __init__(self):
@@ -112,7 +114,7 @@ class SpotifyApp(QWidget):
         Updates the song label with the current song's name and artist.
         """
         track_name = track['name']
-        artist = ", ".join(artist['name'] for artist in track['artists'])
+        artist = ", ".join(artist['name'] for artist in track['artists']) # This just reeks of AI lmao
         self.song_label.setText(f"Song: {track_name} by {artist}")
         self.song_label.setWordWrap(True)
         max_title_width = int(self.width() * 0.75)
@@ -133,15 +135,18 @@ class SpotifyApp(QWidget):
         """
         Updates the stats label with an AI overview of the song's tempo and bpm.
         """
-        track_name = track['name']
-        artist = ", ".join(artist['name'] for artist in track['artists'])
-        response = self.openai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "developer", "content": "You are a music expert who provides accurate song information from Spotify and Tunebat as a space-separated list."},
-                      {"role": "user", "content": f"what is the key and bpm of {track_name} by {artist}? provide your response in exactly the same format as the following, with no additional response text: Cmaj 100bpm"}],
-            max_tokens=10
-        )
-        self.stats_label.setText(response.choices[0].message.content)
+        #track_name = track['name']
+        #artist = ", ".join(artist['name'] for artist in track['artists'])
+        #response = self.openai.chat.completions.create(
+        #    model="gpt-4o-mini",
+        #    messages=[{"role": "developer", "content": "You are a music expert who provides accurate song information from Spotify and Tunebat as a space-separated list."},
+        #              {"role": "user", "content": f"what is the key and bpm of {track_name} by {artist}? provide your response in exactly the same format as the following, with no additional response text: Cmaj 100bpm"}],
+        #    max_tokens=10
+        #)
+        #self.stats_label.setText(response.choices[0].message.content)
+        #current_song_id = track['id']
+        #song_data = get_tunebat_data(current_song_id)
+        #self.stats_label.setText()
 
     def update_status(self):
         """ 
