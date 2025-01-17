@@ -1,0 +1,14 @@
+# Ignore sensitive information
+venv/
+auth.env
+
+#Ignore Python bytecode
+__pycache__/
+*.pyc
+
+#Ignore Build and distribution directories
+build/
+dist/
+
+# Ignore Cache files
+*.cache

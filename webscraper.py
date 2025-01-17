@@ -1,5 +1,4 @@
 from bs4 import BeautifulSoup
-import requests
 import cloudscraper
 
 def get_tunebat_data(track_id):
