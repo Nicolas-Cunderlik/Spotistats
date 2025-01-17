@@ -34,30 +34,40 @@ class SpotifyApp(QWidget):
         """
         super().__init__()
 
+        # Window base settings
         self.setWindowTitle("Spotistats")
         self.setWindowIcon(QIcon('SpotifyAppLogo.png'))
-        self.setGeometry(100, 100, 400, 800)
+        self.setGeometry(50, 50, 300, 600)
         self.setStyleSheet("background-color: #000000;")
 
         # Layout and widgets
         self.layout = QVBoxLayout()
 
+        # Frames
         self.title_frame = QFrame()
-        self.title_frame.setFixedHeight(100)
         self.stats_frame = QFrame()
-        self.album_cover_frame = QFrame()
+        self.song_name_and_artist_frame = QFrame()
+        
+        # Fixed heights
+        self.title_frame.setFixedHeight(100)
+        self.song_name_and_artist_frame.setFixedHeight(80)
 
+        # Set frame styles for title and stats
         self.title_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
         self.stats_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
-        self.album_cover_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
         
         self.title_layout = QVBoxLayout()
-        self.stats_layout = QVBoxLayout()
-        self.album_cover_layout = QVBoxLayout()
+        self.body_layout = QVBoxLayout()
+        self.body_stats_layout = QHBoxLayout() # Goes inside body_layout
+        self.song_name_and_artist_layout = QVBoxLayout()
 
         self.title_label = QLabel("SPOTISTATS")
-        self.song_label = QLabel("Song: Loading...")
-        self.stats_label = QLabel("Stats: Loading...")
+        self.stats_label = QLabel("Stats loading...")
+        self.ai_label = QLabel("AI Suggestions loading...")
+        self.album_cover_label = QLabel() # FIXME: make this image scale
+        self.album_cover_label.setPixmap(QPixmap(260, 260))
+        self.song_name_label = QLabel("Song name loading...")
+        self.artist_label = QLabel("Artist name loading...")
 
         title_font_id = QFontDatabase.addApplicationFont("KdamThmorPro-Regular.ttf")
         font_families = QFontDatabase.applicationFontFamilies(title_font_id)
@@ -65,29 +75,35 @@ class SpotifyApp(QWidget):
         self.title_label.setFont(iceberg_font)
 
         self.title_label.setStyleSheet("color: #FFFFFF;")
-        self.song_label.setStyleSheet("color: #FFFFFF;")
+        self.song_name_label.setStyleSheet("color: #FFFFFF; font-size: 24px;")
+        self.artist_label.setStyleSheet("color: #AAAAAA; font-size: 20px;")
         self.stats_label.setStyleSheet("color: #FFFFFF;")
+        self.ai_label.setStyleSheet("color: #FFFFFF;")
 
         self.title_layout.addWidget(self.title_label)
-        self.stats_layout.addWidget(self.song_label)
-        self.stats_layout.addWidget(self.stats_label)
-
-        self.album_cover = QLabel() # FIXME: make this image scale
-        self.album_cover.setPixmap(QPixmap(260, 260))
+        self.body_stats_layout.addWidget(self.stats_label)
+        self.body_stats_layout.addWidget(self.ai_label)
+        self.body_layout.addLayout(self.body_stats_layout)
+        self.body_layout.addSpacing(6)
+        self.body_layout.addWidget(self.album_cover_label)
+        self.song_name_and_artist_layout.addWidget(self.song_name_label)
+        self.song_name_and_artist_layout.addWidget(self.artist_label)
 
         self.title_layout.setAlignment(Qt.AlignCenter)
-        self.album_cover_layout.addWidget(self.album_cover)
-        self.album_cover_layout.setAlignment(self.album_cover, Qt.AlignCenter)
+        self.song_name_and_artist_layout.setAlignment(Qt.AlignCenter)
+
+        self.song_name_label.setAlignment(Qt.AlignCenter)
+        self.artist_label.setAlignment(Qt.AlignCenter)
 
         self.title_frame.setLayout(self.title_layout)
-        self.stats_frame.setLayout(self.stats_layout)
-        self.album_cover_frame.setLayout(self.album_cover_layout)
+        self.stats_frame.setLayout(self.body_layout)
+        self.song_name_and_artist_frame.setLayout(self.song_name_and_artist_layout)
 
         self.layout.addWidget(self.title_frame)
         self.layout.addSpacing(6)
         self.layout.addWidget(self.stats_frame)
         self.layout.addSpacing(6)
-        self.layout.addWidget(self.album_cover_frame)
+        self.layout.addWidget(self.song_name_and_artist_frame)
 
         self.setLayout(self.layout)
 
@@ -117,24 +133,33 @@ class SpotifyApp(QWidget):
                 self.update_stats_label_bs4(track)
             # Remove song data if no song is playing
             else:
-                self.song_label.setText("No song is currently playing.")
-                self.stats_label.setText("No song data available.")
+                self.artist_label.setText("- - - - -")
+                self.song_name_label.setText("No song playing.")
+                self.stats_label.setText("- - - - -")
                 if hasattr(self, 'album_cover'):
-                    self.album_cover.setVisible(False)
+                    self.album_cover_label.setVisible(False)
             self.update_status()
         except Exception as e:
-            self.song_label.setText(str(e))
+            self.artist_label.setText(str(e))
 
     def update_song_label_spotify(self, track):
         """
         Updates the song label with the current song's name and artist.
         """
+        # Set label text
         track_name = track['name']
         artist = ", ".join(artist['name'] for artist in track['artists']) # This just reeks of AI lmao
-        self.song_label.setText(f"Song: {track_name} by {artist}")
-        self.song_label.setWordWrap(True)
-        max_title_width = int(self.width() * 0.75)
-        self.song_label.setMaximumWidth(max_title_width)
+        self.song_name_label.setText(f"{track_name}")
+        self.artist_label.setText(f"{artist}")
+
+        # Wrap text and set maximum width
+        max_title_width = int(self.width() * 0.95)
+        self.artist_label.setMaximumWidth(max_title_width)
+        self.song_name_label.setMaximumWidth(max_title_width)
+
+        # Set text alignment
+        self.artist_label.setAlignment(Qt.AlignCenter)
+        self.song_name_label.setAlignment(Qt.AlignCenter)
 
     def update_album_cover_label_spotify(self, track):
         """
@@ -144,16 +169,20 @@ class SpotifyApp(QWidget):
         album_cover_url = track['album']['images'][0]['url']
         pixmap = QPixmap()
         pixmap.loadFromData(requests.get(album_cover_url).content)
-        self.album_cover.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        self.album_cover.setVisible(True)
+        self.album_cover_label.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.album_cover_label.setVisible(True)
 
     def update_stats_label_bs4(self, track):
         """
-        Updates the stats label with scraped statistics from TuneBat.
+        Updates the stats label with scraped statistics from TuneBat. TODO: make this a separate thread
         """
         #NOTE: Not many API credits! Need to find alternative to TuneBat if this is ever going to go anywhere
         current_song_id = track['id']
         stats = get_tunebat_data(current_song_id)
+        key = stats[1].text # Key is the second element in the list
+        bpm = stats[3].text # BPM is the fourth element in the list
+        self.stats_label.setText(f"Key: {key} | BPM: {bpm}")
+        
 
     #def update_suggestions_label_openai(self, track):
     #    """

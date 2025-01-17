@@ -34,7 +34,6 @@ def get_tunebat_data(track_id):
     if response.status_code == 200:
         soup = BeautifulSoup(response.content, "html.parser")
         stats = soup.find_all("h3", class_="ant-typography")
-        print(stats)
         return stats
     else:
         print(f"Error: Unable to fetch data. Status code: {response.status_code}")
