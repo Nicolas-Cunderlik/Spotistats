@@ -18,8 +18,6 @@ from bs4 import BeautifulSoup
 import requests
 from auth import *
 
-BASE_URL = "https://www.tunebat.com/Info/_/"
-
 def get_tunebat_data(track_id):
     """
     Returns the key, BPM, and energy of a song from Tunebat.

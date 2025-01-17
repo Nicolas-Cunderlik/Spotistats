@@ -33,6 +33,7 @@ SPOTIPY_CLIENT_SECRET = auth_vars.get('SPOTIPY_CLIENT_SECRET')
 SPOTIPY_REDIRECT_URI = auth_vars.get('SPOTIPY_REDIRECT_URI')
 OPENAI_API_KEY = auth_vars.get('OPENAI_API_KEY')
 SCRAPER_API_KEY = auth_vars.get('SCRAPER_API_KEY')
+BASE_URL = auth_vars.get('BASE_URL')
 
 # Spotify authentication and client setup
 def get_spotify_client():
