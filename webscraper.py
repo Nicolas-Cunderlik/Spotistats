@@ -28,20 +28,11 @@ def get_tunebat_data(track_id):
     Returns:
         A dictionary containing the key, BPM, and energy of the song.
     """
-    # Construct the dynamic URL
     dynamic_url = f"{BASE_URL}{track_id}"
-    
-    # Pass the URL through ScraperAPI
     scraperapi_url = f"http://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={dynamic_url}"
-    
-    # Fetch the page content
     response = requests.get(scraperapi_url)
-    
-    # Check if the response is successful
     if response.status_code == 200:
         soup = BeautifulSoup(response.content, "html.parser")
-        
-        # Example: Extract song stats (replace with actual logic for your target content)
         stats = soup.find_all("h3", class_="ant-typography")
         print(stats)
         return stats
