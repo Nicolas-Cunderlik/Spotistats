@@ -1,3 +1,19 @@
+"""
+Filename: app.py
+Author: Nicolas Cunderlik
+Date: 2025
+Description: A PyQt5 application for displaying song information and statistics from Spotify and Tunebat.
+
+Copyright © 2025 Nicolas Cunderlik. All Rights Reserved.
+
+This source code is the property of the author/owner and is protected under
+copyright law. Unauthorized copying, modification, distribution, or any use
+of this file, in part or in full, without prior written permission from the
+author/owner, is strictly prohibited.
+
+For inquiries, contact: nicolas7cunderlik@gmail.com
+"""
+
 import sys
 from PyQt5.QtCore import * 
 from PyQt5.QtGui import * 
@@ -133,20 +149,25 @@ class SpotifyApp(QWidget):
 
     def update_stats_label_bs4(self, track):
         """
-        Updates the stats label with an AI overview of the song's tempo and bpm.
+        Updates the stats label with scraped statistics from TuneBat.
         """
-        #track_name = track['name']
-        #artist = ", ".join(artist['name'] for artist in track['artists'])
-        #response = self.openai.chat.completions.create(
-        #    model="gpt-4o-mini",
-        #    messages=[{"role": "developer", "content": "You are a music expert who provides accurate song information from Spotify and Tunebat as a space-separated list."},
-        #              {"role": "user", "content": f"what is the key and bpm of {track_name} by {artist}? provide your response in exactly the same format as the following, with no additional response text: Cmaj 100bpm"}],
-        #    max_tokens=10
-        #)
-        #self.stats_label.setText(response.choices[0].message.content)
-        #current_song_id = track['id']
-        #song_data = get_tunebat_data(current_song_id)
-        #self.stats_label.setText()
+        #NOTE: Not many API credits! Need to find alternative to TuneBat if this is ever going to go anywhere
+        current_song_id = track['id']
+        stats = get_tunebat_data(current_song_id)
+
+    #def update_suggestions_label_openai(self, track):
+    #    """
+    #    Updates the suggestions label with an AI-generated suggestion for the song.
+    #    """
+    #    track_name = track['name']
+    #    artist = ", ".join(artist['name'] for artist in track['artists'])
+    #    response = self.openai.chat.completions.create(
+    #        model="gpt-4o-mini",
+    #        messages=[{"role": "developer", "content": "You are a music expert who provides accurate song information from Spotify and Tunebat as a space-separated list."},
+    #                  {"role": "user", "content": f"what is the key and bpm of {track_name} by {artist}? provide your response in exactly the same format as the following, with no additional response text: Cmaj 100bpm"}],
+    #        max_tokens=10
+    #    )
+    #    self.stats_label.setText(response.choices[0].message.content)
 
     def update_status(self):
         """ 
@@ -203,7 +224,7 @@ class SpotifyApp(QWidget):
         # Timer to update song info
         self.spotifyAPI_timer = QTimer()
         self.spotifyAPI_timer.timeout.connect(self.update_song_info)
-        self.spotifyAPI_timer.start(2000) # Call Spotify API every 2 seconds
+        self.spotifyAPI_timer.start(1000) # Update every second if new song playing
         self.update_song_info() # Initial fetch
 
 # Main application loop

@@ -1,3 +1,19 @@
+"""
+Filename: auth.py
+Author: Nicolas Cunderlik
+Date: 2025
+Description: Authorization tools for accessing the Spotify, OpenAI, and ScraperAPI services.
+
+Copyright © 2025 Nicolas Cunderlik. All Rights Reserved.
+
+This source code is the property of the author/owner and is protected under
+copyright law. Unauthorized copying, modification, distribution, or any use
+of this file, in part or in full, without prior written permission from the
+author/owner, is strictly prohibited.
+
+For inquiries, contact: nicolas7cunderlik@gmail.com
+"""
+
 import spotipy
 from openai import OpenAI
 from spotipy.oauth2 import SpotifyOAuth
@@ -16,6 +32,7 @@ SPOTIPY_CLIENT_ID = auth_vars.get('SPOTIPY_CLIENT_ID')
 SPOTIPY_CLIENT_SECRET = auth_vars.get('SPOTIPY_CLIENT_SECRET')
 SPOTIPY_REDIRECT_URI = auth_vars.get('SPOTIPY_REDIRECT_URI')
 OPENAI_API_KEY = auth_vars.get('OPENAI_API_KEY')
+SCRAPER_API_KEY = auth_vars.get('SCRAPER_API_KEY')
 
 # Spotify authentication and client setup
 def get_spotify_client():
@@ -50,3 +67,11 @@ def get_openai_client():
         api_key=OPENAI_API_KEY
     )
 
+def get_scraper_api_client():
+    """
+    Returns the ScraperAPI client from the environment variable API_KEY.
+
+    Returns:
+        The ScraperAPI API key as a string.
+    """
+    return SCRAPER_API_KEY
