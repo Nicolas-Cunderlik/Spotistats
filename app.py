@@ -145,7 +145,7 @@ class SpotifyApp(QWidget):
         #)
         #self.stats_label.setText(response.choices[0].message.content)
         #current_song_id = track['id']
-        song_data = get_tunebat_data(current_song_id)
+        #song_data = get_tunebat_data(current_song_id)
         #self.stats_label.setText()
 
     def update_status(self):

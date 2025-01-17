@@ -2,10 +2,20 @@ import spotipy
 from openai import OpenAI
 from spotipy.oauth2 import SpotifyOAuth
 
-SPOTIPY_CLIENT_ID = "1c44785dc48c495c9cf8d3dea314c26f"
-SPOTIPY_CLIENT_SECRET = "2f083954a51944a785abdb2d99a2455d"
-SPOTIPY_REDIRECT_URI = "http://localhost:4000/callback"
-OPENAI_API_KEY = "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"
+# Sensitive information
+auth_vars = {}
+with open("auth.env", 'r') as file:
+    for line in file:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        key, value = line.split('=', 1)
+        auth_vars[key.strip()] = value.strip()
+        
+SPOTIPY_CLIENT_ID = auth_vars.get('SPOTIPY_CLIENT_ID')
+SPOTIPY_CLIENT_SECRET = auth_vars.get('SPOTIPY_CLIENT_SECRET')
+SPOTIPY_REDIRECT_URI = auth_vars.get('SPOTIPY_REDIRECT_URI')
+OPENAI_API_KEY = auth_vars.get('OPENAI_API_KEY')
 
 # Spotify authentication and client setup
 def get_spotify_client():
@@ -39,3 +49,4 @@ def get_openai_client():
     return OpenAI(
         api_key=OPENAI_API_KEY
     )
+
