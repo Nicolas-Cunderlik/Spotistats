@@ -23,6 +23,7 @@ import requests
 
 from auth import *
 from webscraper import *
+from MiscUtil import *
 
 class SpotifyApp(QWidget):
     def __init__(self):
@@ -38,7 +39,8 @@ class SpotifyApp(QWidget):
         self.setWindowTitle("Spotistats")
         self.setWindowIcon(QIcon('SpotifyAppLogo.png'))
         self.setGeometry(50, 50, 300, 600)
-        self.setStyleSheet("background-color: #000000;")
+        self.setFixedSize(300, 600) # TODO: Maybe make this resizable?
+        self.setStyleSheet("background-color: black;")
 
         # Layout and widgets
         self.layout = QVBoxLayout()
@@ -64,8 +66,9 @@ class SpotifyApp(QWidget):
         self.title_label = QLabel("SPOTISTATS")
         self.stats_label = QLabel("Stats loading...")
         self.ai_label = QLabel("AI Suggestions loading...")
-        self.album_cover_label = QLabel() # FIXME: make this image scale
+        self.album_cover_label = ClickableLabel(self)
         self.album_cover_label.setPixmap(QPixmap(260, 260))
+        self.album_cover_label.clicked.connect(self.showFullScreenCover)
         self.song_name_label = QLabel("Song name loading...")
         self.artist_label = QLabel("Artist name loading...")
 
@@ -74,11 +77,11 @@ class SpotifyApp(QWidget):
         iceberg_font = QFont(font_families[0], 30)
         self.title_label.setFont(iceberg_font)
 
-        self.title_label.setStyleSheet("color: #FFFFFF;")
-        self.song_name_label.setStyleSheet("color: #FFFFFF; font-size: 24px;")
+        self.title_label.setStyleSheet("color: white;")
+        self.song_name_label.setStyleSheet("color: white; font-size: 24px;")
         self.artist_label.setStyleSheet("color: #AAAAAA; font-size: 20px;")
-        self.stats_label.setStyleSheet("color: #FFFFFF;")
-        self.ai_label.setStyleSheet("color: #FFFFFF;")
+        self.stats_label.setStyleSheet("color: white;")
+        self.ai_label.setStyleSheet("color: white;")
 
         self.title_layout.addWidget(self.title_label)
         self.body_stats_layout.addWidget(self.stats_label)
@@ -108,11 +111,11 @@ class SpotifyApp(QWidget):
         self.setLayout(self.layout)
 
         # Necessary clients
-        self.spotify = get_spotify_client()
-        self.openai = get_openai_client()
+        self.spotify = getSpotifyClient()
+        self.openai = getOpenAIClient()
         self.run()
 
-    def update_song_info(self):
+    def updateSongInfo(self):
         """
         Updates the song and stats labels with the current song's name,
         artist, tempo, energy, and danceability. If no song is currently
@@ -121,16 +124,16 @@ class SpotifyApp(QWidget):
 
         This function is called every second using a QTimer.
         """
-        if not self.spotify or not self.openai or not self.track_changed():
+        if not self.spotify or not self.openai or not self.trackChanged():
             return
         try:
-            current_track = self.get_current_playback()
-            if self.track_playing():
+            current_track = self.getCurrentPlayback()
+            if self.trackPlaying():
                 print("Updating song info...")
                 track = current_track['item']
-                self.update_song_label_spotify(track)
-                self.update_album_cover_label_spotify(track)
-                self.update_stats_label_bs4(track)
+                self.updateSongLabel(track)
+                self.updateAlbumCoverLabel(track)
+                self.updateStatsLabel(track)
             # Remove song data if no song is playing
             else:
                 self.artist_label.setText("- - - - -")
@@ -138,11 +141,11 @@ class SpotifyApp(QWidget):
                 self.stats_label.setText("- - - - -")
                 if hasattr(self, 'album_cover'):
                     self.album_cover_label.setVisible(False)
-            self.update_status()
+            self.updateStatus()
         except Exception as e:
             self.artist_label.setText(str(e))
 
-    def update_song_label_spotify(self, track):
+    def updateSongLabel(self, track):
         """
         Updates the song label with the current song's name and artist.
         """
@@ -161,7 +164,7 @@ class SpotifyApp(QWidget):
         self.artist_label.setAlignment(Qt.AlignCenter)
         self.song_name_label.setAlignment(Qt.AlignCenter)
 
-    def update_album_cover_label_spotify(self, track):
+    def updateAlbumCoverLabel(self, track):
         """
         Updates the album cover whenever update_song_info is called. TODO: make this a separate thread
         """
@@ -172,13 +175,13 @@ class SpotifyApp(QWidget):
         self.album_cover_label.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.album_cover_label.setVisible(True)
 
-    def update_stats_label_bs4(self, track):
+    def updateStatsLabel(self, track):
         """
         Updates the stats label with scraped statistics from TuneBat. TODO: make this a separate thread
         """
         #NOTE: Not many API credits! Need to find alternative to TuneBat if this is ever going to go anywhere
         current_song_id = track['id']
-        stats = get_tunebat_data(current_song_id)
+        stats = getTunebatData(current_song_id)
         key = stats[1].text # Key is the second element in the list
         bpm = stats[3].text # BPM is the fourth element in the list
         self.stats_label.setText(f"Key: {key} | BPM: {bpm}")
@@ -198,33 +201,41 @@ class SpotifyApp(QWidget):
     #    )
     #    self.stats_label.setText(response.choices[0].message.content)
 
-    def update_status(self):
+    def showFullScreenCover(self):
+        # Show a fullscreen window with the larger image
+        track = self.getCurrentPlayback()['item']
+        album_cover_url = track['album']['images'][0]['url']
+        data = requests.get(album_cover_url).content
+        self.fullscreen_window = FullscreenImageWindow(data)
+        self.fullscreen_window.show()
+
+    def updateStatus(self):
         """ 
         Updates the status of the song playing.
         """
-        if self.track_playing():
-            current_track = self.get_current_playback()
+        if self.trackPlaying():
+            current_track = self.getCurrentPlayback()
             self.last_song_id = current_track['item']['id']
             self.song_playing = True
         else:
             self.last_song_id = 0
             self.song_playing = False
 
-    def track_playing(self):
+    def trackPlaying(self):
         """
         Returns True if a track is currently playing, False otherwise.
         """
-        current_track = self.get_current_playback()
+        current_track = self.getCurrentPlayback()
         return current_track and current_track['is_playing']
     
-    def track_changed(self):
+    def trackChanged(self):
         """
         Checks if the current playback state has changed.
 
         Returns:
-            True if the playback state has changed, False otherwise.
+        True if the playback state has changed, False otherwise.
         """
-        current_track = self.get_current_playback()
+        current_track = self.getCurrentPlayback()
         if current_track and current_track['is_playing'] != self.song_playing:
             return True
         elif current_track:
@@ -233,18 +244,18 @@ class SpotifyApp(QWidget):
         else:
             return False
         
-    def get_current_playback(self):
+    def getCurrentPlayback(self):
         """
-        Returns the current playback state of the Spotify client.
+        Gets the current playback state of the Spotify client.
 
         Returns:
-            The current playback state of the Spotify client.
+        The current playback state of the Spotify client.
         """
         return self.spotify.current_playback()
     
     def run(self):
         """
-        Primary playback loop. Runs using two QTimer objects to periodically update the song information, with separate timers for the Spotify and OpenAI APIs.
+        Primary playback loop. Runs using a QTimer to update the song information every second, only if needed.
         """
         # Variables to track changes in playback state
         self.last_song_id = 0
@@ -252,9 +263,9 @@ class SpotifyApp(QWidget):
 
         # Timer to update song info
         self.spotifyAPI_timer = QTimer()
-        self.spotifyAPI_timer.timeout.connect(self.update_song_info)
+        self.spotifyAPI_timer.timeout.connect(self.updateSongInfo)
         self.spotifyAPI_timer.start(1000) # Update every second if new song playing
-        self.update_song_info() # Initial fetch
+        self.updateSongInfo() # Initial fetch
 
 # Main application loop
 if __name__ == "__main__":

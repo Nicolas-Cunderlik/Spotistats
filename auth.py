@@ -36,7 +36,7 @@ SCRAPER_API_KEY = auth_vars.get('SCRAPER_API_KEY')
 BASE_URL = auth_vars.get('BASE_URL')
 
 # Spotify authentication and client setup
-def get_spotify_client():
+def getSpotifyClient():
     """
     Returns a Spotify client object for interacting with the Spotify API.
 
@@ -52,12 +52,12 @@ def get_spotify_client():
     """
     scope = "user-read-playback-state"
     sp_oauth = SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID,
-                        client_secret=SPOTIPY_CLIENT_SECRET,
-                        redirect_uri=SPOTIPY_REDIRECT_URI,
-                        scope=scope)
+                            client_secret=SPOTIPY_CLIENT_SECRET,
+                            redirect_uri=SPOTIPY_REDIRECT_URI,
+                            scope=scope)
     return spotipy.Spotify(auth_manager=sp_oauth)
 
-def get_openai_client():
+def getOpenAIClient():
     """
     Returns the OpenAI client from the environment variable API_KEY.
 
@@ -68,7 +68,7 @@ def get_openai_client():
         api_key=OPENAI_API_KEY
     )
 
-def get_scraper_api_client():
+def getScraperAPIClient():
     """
     Returns the ScraperAPI client from the environment variable API_KEY.
 
