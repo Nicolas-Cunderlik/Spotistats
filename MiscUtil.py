@@ -43,7 +43,6 @@ class FullscreenImageWindow(QWidget):
             self.close() # Close the fullscreen window
 
 class ClickableLabel(QLabel):
-
     def __init__(self, parent=None):
         super().__init__(parent)
 
