@@ -12,3 +12,6 @@ dist/
 
 # Ignore Cache files
 *.cache
+
+# Ignore font file
+*.ttf
