@@ -2,7 +2,7 @@
 Filename: app.py
 Author: Nicolas Cunderlik
 Date: 2025
-Description: A PyQt5 application for displaying song information and statistics from Spotify and Tunebat.
+Description: A PyQt5 application for displaying song information and statistics from Spotify.
 
 Copyright © 2025 Nicolas Cunderlik. All Rights Reserved.
 
@@ -200,42 +200,40 @@ class SpotifyApp(QWidget):
         pixmap = QPixmap(260, 260)
         pixmap.loadFromData(requests.get(album_cover_url).content)
         pixmap = pixmap.scaled(260, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-
+        
         # Create rounding for the pixmap
         rounded = QPixmap(260, 260)
         rounded.fill(QColor("transparent"))
-
-        # Draw rounded rect on new pixmap using original pixmap as brush
+        
+        # Draw rounded rectangle
         painter = QPainter(rounded)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setBrush(QBrush(pixmap))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(0, 0, 260, 260, 8, 8)
         painter.end()
-
-        # Set pixmap of label
+        
         self.album_cover_label.setPixmap(rounded)
         self.album_cover_label.setVisible(True)
 
     def updateStatsLabel(self, track):
         """
-        Updates the stats label with scraped statistics from TuneBat. TODO: make this a separate thread
+        Updates the stats label with web-scraped song statistics. TODO: make this a separate thread
         """
-        #NOTE: Not many API credits! Need to find alternative to TuneBat if this is ever going to go anywhere
+        #NOTE: Not many API credits! Need to find alternative if this is ever going to go anywhere
         current_song_id = track['id']
-        stats = getTunebatData(current_song_id)
+        stats = scrapeSongData(current_song_id)
         key = stats[1].text # Key is the second element in the list
         bpm = stats[3].text # BPM is the fourth element in the list
         self.stats_label.setText(f"KEY\n{key}\n\nBPM\n{bpm}")
         
-
     def updateSuggestionsLabel(self, track):
         """
         Updates the suggestions label with AI-generated sound design suggestions for the song.
         """
         track_name = track['name']
         artist = ", ".join(artist['name'] for artist in track['artists'])
-        stats = getTunebatData(track['id'])
+        stats = scrapeSongData(track['id'])
         key = stats[1].text # Key is the second element in the list
         bpm = stats[3].text # BPM is the fourth element in the list
         response = self.openai.chat.completions.create(

@@ -2,7 +2,7 @@
 Filename: webscraper.py
 Author: Nicolas Cunderlik
 Date: 2025
-Description: Web scraping tools for extracting song data from Tunebat.
+Description: Web scraping tools for extracting song data.
 
 Copyright © 2025 Nicolas Cunderlik. All Rights Reserved.
 
@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 import requests
 from auth import *
 
-def getTunebatData(track_id):
+def scrapeSongData(track_id):
     """
     Returns the key, BPM, and energy of a song from Tunebat.
 
