@@ -14,6 +14,7 @@ Spotistats is a project designed to provide detailed statistics and musical insi
 - **Rating System**: Rate the LLM suggestions generated using the OpenAI API.
 - **Advanced Prompting**: Customize your prompts to the LLM without having to worry about finding the necessary song statistics for your prompt.
 - **Mobile App**: Access your stats on the go with a mobile app.
+- **Multi-threaded Performance Upgrade**: No more bottlenecks getting in the way of performance!
 
 ## Installation
 
