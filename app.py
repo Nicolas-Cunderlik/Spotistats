@@ -23,7 +23,7 @@ import requests
 
 from auth import *
 from webscraper import *
-from MiscUtil import *
+from miscutil import *
 
 class SpotifyApp(QWidget):
     def __init__(self):
@@ -39,7 +39,7 @@ class SpotifyApp(QWidget):
         self.setWindowTitle("Spotistats")
         self.setWindowIcon(QIcon('SpotifyAppLogo.png'))
         self.setGeometry(50, 50, 300, 600)
-        self.setFixedSize(300, 600) # TODO: Maybe make this resizable?
+        self.setFixedSize(300, 650) # TODO: Maybe make this resizable?
         self.setStyleSheet("background-color: black;")
 
         # Layout and widgets
@@ -49,26 +49,34 @@ class SpotifyApp(QWidget):
         self.title_frame = QFrame()
         self.stats_frame = QFrame()
         self.song_name_and_artist_frame = QFrame()
+        self.stats_label_frame = QFrame()
+        self.ai_label_frame = QFrame()
         
         # Fixed heights
         self.title_frame.setFixedHeight(100)
         self.song_name_and_artist_frame.setFixedHeight(80)
+        self.stats_label_frame.setFixedWidth(70)
+        self.ai_label_frame.setFixedWidth(180)
 
         # Set frame styles for title and stats
         self.title_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
         self.stats_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
+        self.stats_label_frame.setStyleSheet("background-color: #292929; border-radius: 8px;")
+        self.ai_label_frame.setStyleSheet("background-color: #292929; border-radius: 8px;")
         
         self.title_layout = QVBoxLayout()
         self.body_layout = QVBoxLayout()
-        self.body_stats_layout = QHBoxLayout() # Goes inside body_layout
+        self.body_stats_layout = QHBoxLayout() # Changed to QVBoxLayout to stack the labels vertically
         self.song_name_and_artist_layout = QVBoxLayout()
 
         self.title_label = QLabel("SPOTISTATS")
         self.stats_label = QLabel("Stats loading...")
         self.ai_label = QLabel("AI Suggestions loading...")
+
         self.album_cover_label = ClickableLabel(self)
         self.album_cover_label.setPixmap(QPixmap(260, 260))
         self.album_cover_label.clicked.connect(self.showFullScreenCover)
+
         self.song_name_label = QLabel("Song name loading...")
         self.artist_label = QLabel("Artist name loading...")
 
@@ -76,16 +84,31 @@ class SpotifyApp(QWidget):
         font_families = QFontDatabase.applicationFontFamilies(title_font_id)
         iceberg_font = QFont(font_families[0], 30)
         self.title_label.setFont(iceberg_font)
+        self.stats_label.setFont(QFont(font_families[0], 12))
+        self.ai_label.setFont(QFont(font_families[0], 12))
 
         self.title_label.setStyleSheet("color: white;")
         self.song_name_label.setStyleSheet("color: white; font-size: 24px;")
         self.artist_label.setStyleSheet("color: #AAAAAA; font-size: 20px;")
-        self.stats_label.setStyleSheet("color: white;")
-        self.ai_label.setStyleSheet("color: white;")
+        self.stats_label.setStyleSheet("color: white; font-size: 12px;")
+        self.ai_label.setStyleSheet("color: white; font-size: 12px;")
 
         self.title_layout.addWidget(self.title_label)
-        self.body_stats_layout.addWidget(self.stats_label)
-        self.body_stats_layout.addWidget(self.ai_label)
+        
+        # Add stats_label and ai_label to their respective frames
+        self.stats_label_layout = QVBoxLayout()
+        self.stats_label_layout.addWidget(self.stats_label)
+        self.stats_label_frame.setLayout(self.stats_label_layout)
+        
+        self.ai_label_layout = QVBoxLayout()
+        self.ai_label_layout.addWidget(self.ai_label)
+        self.ai_label_frame.setLayout(self.ai_label_layout)
+        
+        # Add the frames to the body_stats_layout
+        self.body_stats_layout.addWidget(self.stats_label_frame)
+        self.body_stats_layout.addSpacing(4)
+        self.body_stats_layout.addWidget(self.ai_label_frame)
+        
         self.body_layout.addLayout(self.body_stats_layout)
         self.body_layout.addSpacing(6)
         self.body_layout.addWidget(self.album_cover_label)
@@ -97,6 +120,8 @@ class SpotifyApp(QWidget):
 
         self.song_name_label.setAlignment(Qt.AlignCenter)
         self.artist_label.setAlignment(Qt.AlignCenter)
+        self.stats_label.setAlignment(Qt.AlignCenter)
+        self.ai_label.setAlignment(Qt.AlignCenter)
 
         self.title_frame.setLayout(self.title_layout)
         self.stats_frame.setLayout(self.body_layout)
@@ -134,11 +159,13 @@ class SpotifyApp(QWidget):
                 self.updateSongLabel(track)
                 self.updateAlbumCoverLabel(track)
                 self.updateStatsLabel(track)
+                self.updateSuggestionsLabel(track)
             # Remove song data if no song is playing
             else:
                 self.artist_label.setText("- - - - -")
                 self.song_name_label.setText("No song playing.")
                 self.stats_label.setText("- - - - -")
+                self.ai_label.setText("AI Suggestions loading...")
                 if hasattr(self, 'album_cover'):
                     self.album_cover_label.setVisible(False)
             self.updateStatus()
@@ -170,9 +197,24 @@ class SpotifyApp(QWidget):
         """
         # Fetch album cover
         album_cover_url = track['album']['images'][0]['url']
-        pixmap = QPixmap()
+        pixmap = QPixmap(260, 260)
         pixmap.loadFromData(requests.get(album_cover_url).content)
-        self.album_cover_label.setPixmap(pixmap.scaled(260, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        pixmap = pixmap.scaled(260, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+        # Create rounding for the pixmap
+        rounded = QPixmap(260, 260)
+        rounded.fill(QColor("transparent"))
+
+        # Draw rounded rect on new pixmap using original pixmap as brush
+        painter = QPainter(rounded)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QBrush(pixmap))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(0, 0, 260, 260, 8, 8)
+        painter.end()
+
+        # Set pixmap of label
+        self.album_cover_label.setPixmap(rounded)
         self.album_cover_label.setVisible(True)
 
     def updateStatsLabel(self, track):
@@ -184,22 +226,26 @@ class SpotifyApp(QWidget):
         stats = getTunebatData(current_song_id)
         key = stats[1].text # Key is the second element in the list
         bpm = stats[3].text # BPM is the fourth element in the list
-        self.stats_label.setText(f"Key: {key} | BPM: {bpm}")
+        self.stats_label.setText(f"KEY\n{key}\n\nBPM\n{bpm}")
         
 
-    #def update_suggestions_label_openai(self, track):
-    #    """
-    #    Updates the suggestions label with an AI-generated suggestion for the song.
-    #    """
-    #    track_name = track['name']
-    #    artist = ", ".join(artist['name'] for artist in track['artists'])
-    #    response = self.openai.chat.completions.create(
-    #        model="gpt-4o-mini",
-    #        messages=[{"role": "developer", "content": "You are a music expert who provides accurate song information from Spotify and Tunebat as a space-separated list."},
-    #                  {"role": "user", "content": f"what is the key and bpm of {track_name} by {artist}? provide your response in exactly the same format as the following, with no additional response text: Cmaj 100bpm"}],
-    #        max_tokens=10
-    #    )
-    #    self.stats_label.setText(response.choices[0].message.content)
+    def updateSuggestionsLabel(self, track):
+        """
+        Updates the suggestions label with AI-generated sound design suggestions for the song.
+        """
+        track_name = track['name']
+        artist = ", ".join(artist['name'] for artist in track['artists'])
+        stats = getTunebatData(track['id'])
+        key = stats[1].text # Key is the second element in the list
+        bpm = stats[3].text # BPM is the fourth element in the list
+        response = self.openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "developer", "content": "You are a music expert who provides accurate sound design suggestions to imitate to vibe of songs."},
+                      {"role": "user", "content": f"Given the song '{track_name}' by {artist}, with key {key} and BPM {bpm}, generate three chord progressions, using the following format, that would imitate the vibe of the song (your output will be parsed at each underscore). Do not provide any additional information/words: Cmaj-Fmaj-Gmaj7-Amaj, Dsus-Gmin-Amaj11-Bmin, Fmaj-Gmaj7-Asus-Bbmaj"}],
+            max_tokens=50
+        )
+        chord_progressions = response.choices[0].message.content.split(", ")
+        self.ai_label.setText(f"AI Chord Suggestions\n\n{chord_progressions[0]}\n{chord_progressions[1]}\n{chord_progressions[2]}")
 
     def showFullScreenCover(self):
         # Show a fullscreen window with the larger image

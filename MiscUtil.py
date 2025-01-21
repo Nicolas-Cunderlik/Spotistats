@@ -29,7 +29,7 @@ class FullscreenImageWindow(QWidget):
 
         # Create a label to display the image
         self.image_label = QLabel(self)
-        pixmap = QPixmap()
+        pixmap = QPixmap(1000, 1000)
         pixmap.loadFromData(data)
         self.image_label.setPixmap(pixmap.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.image_label.setAlignment(Qt.AlignCenter)
@@ -45,6 +45,7 @@ class FullscreenImageWindow(QWidget):
 class ClickableLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setCursor(Qt.PointingHandCursor)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
