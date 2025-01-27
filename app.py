@@ -35,13 +35,20 @@ class SpotifyApp(QWidget):
         """
         super().__init__()
 
+        self.setupWindow()
+        self.setupLayoutAndWidgets()
+        self.setupClients()
+        self.run()
+
+    def setupWindow(self):
         # Window base settings
         self.setWindowTitle("Spotistats")
         self.setWindowIcon(QIcon('SpotifyAppLogo.png'))
         self.setGeometry(50, 50, 300, 600)
-        self.setFixedSize(300, 650) # TODO: Maybe make this resizable?
+        self.setFixedSize(300, 650)
         self.setStyleSheet("background-color: black;")
 
+    def setupLayoutAndWidgets(self):
         # Layout and widgets
         self.layout = QVBoxLayout()
 
@@ -135,10 +142,10 @@ class SpotifyApp(QWidget):
 
         self.setLayout(self.layout)
 
+    def setupClients(self):
         # Necessary clients
         self.spotify = getSpotifyClient()
         self.openai = getOpenAIClient()
-        self.run()
 
     def updateSongInfo(self):
         """
@@ -149,7 +156,8 @@ class SpotifyApp(QWidget):
 
         This function is called every second using a QTimer.
         """
-        if not self.spotify or not self.openai or not self.trackChanged():
+        isUpdateNeeded = self.spotify and self.openai and self.trackChanged()
+        if not isUpdateNeeded:
             return
         try:
             current_track = self.getCurrentPlayback()
