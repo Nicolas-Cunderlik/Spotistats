@@ -1,4 +1,7 @@
-# Spotistats
+# Spotistats (No longer working)
+
+As of mid-2025, it appears that either Spotify deprecated some of the API endpoints used, or the web scraping functionality broke due to a Tunebat site layout change.
+Until I find the time to fix, this project is on pause.
 
 Spotistats is a project designed to provide detailed statistics and musical insights about songs. With Spotistats, you can easily replicate the vibe of your favourite songs using music theory.
 
