@@ -15,3 +15,7 @@ dist/
 
 # Ignore font file
 *.ttf
+
+# Ignore ML dataset and trained artifacts (regenerable via download_dataset.py / train.py)
+spotistats/ml/data/*.csv
+spotistats/ml/artifacts/

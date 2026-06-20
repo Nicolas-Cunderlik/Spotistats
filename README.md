@@ -1,7 +1,11 @@
-# Spotistats (No longer working)
+# Spotistats (Refactored)
 
-As of mid-2025, it appears that either Spotify deprecated some of the API endpoints used, or the web scraping functionality broke due to a Tunebat site layout change.
-Until I find the time to fix, this project is on pause.
+This repository has been refactored. The legacy app and duplicated modules have
+been archived under the `archive/` directory. The refactored package lives in
+`spotistats/` and the new entrypoint is `run.py`.
+
+See [README_REFACTOR.md](README_REFACTOR.md) for run instructions and the new
+project layout.
 
 Spotistats is a project designed to provide detailed statistics and musical insights about songs. With Spotistats, you can easily replicate the vibe of your favourite songs using music theory.
 

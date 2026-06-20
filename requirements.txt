@@ -1,0 +1,8 @@
+PyQt5
+requests
+spotipy
+openai
+pandas
+numpy
+scikit-learn
+joblib
