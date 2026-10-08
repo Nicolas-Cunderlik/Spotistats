@@ -42,13 +42,16 @@ def getSpotifyClient():
     specified by the SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, and
     SPOTIPY_REDIRECT_URI environment variables, respectively.
 
-    The client will use the "user-read-playback-state" scope, allowing
-    it to read the user's currently playing track.
+    The client uses the "user-read-playback-state" scope to read the user's
+    currently playing track, and "user-modify-playback-state" to play a
+    clicked similar track (playback control requires Spotify Premium).
+    spotipy re-prompts for login automatically if the cached token predates
+    a scope added here.
 
     Returns:
         A Spotify client object.
     """
-    scope = "user-read-playback-state"
+    scope = "user-read-playback-state user-modify-playback-state"
     sp_oauth = SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID,
                             client_secret=SPOTIPY_CLIENT_SECRET,
                             redirect_uri=SPOTIPY_REDIRECT_URI,

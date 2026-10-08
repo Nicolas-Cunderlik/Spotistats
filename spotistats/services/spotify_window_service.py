@@ -131,6 +131,10 @@ def set_window_bounds(hwnd, x, y, width, height):
     user32.SetWindowPos(hwnd, None, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE)
 
 
+def bring_to_top(hwnd):
+    user32.SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+
+
 def place_below(hwnd, above_hwnd):
     """Moves `hwnd` in z-order to sit directly beneath `above_hwnd`, without activating it."""
     user32.SetWindowPos(hwnd, above_hwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)

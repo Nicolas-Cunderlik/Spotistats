@@ -1,7 +1,9 @@
 """Spotify service wrapper - lazy init and safe calls."""
 import logging
 import os
+import threading
 import auth
+from spotipy.exceptions import SpotifyException
 from spotipy.oauth2 import SpotifyOauthError
 
 logger = logging.getLogger(__name__)
@@ -9,6 +11,11 @@ logger = logging.getLogger(__name__)
 class SpotifyService:
     def __init__(self):
         self._client = None
+        # The client is used from the UI thread (playback polling) and from
+        # PlayTrackWorker. Serialize calls so two threads never refresh the
+        # token at once - Spotify rotates refresh tokens, and a concurrent
+        # refresh can leave one caller holding a revoked token.
+        self._lock = threading.RLock()
 
     def _ensure_client(self):
         if self._client is None:
@@ -19,6 +26,10 @@ class SpotifyService:
                 self._client = None
 
     def current_playback(self):
+        with self._lock:
+            return self._current_playback()
+
+    def _current_playback(self):
         self._ensure_client()
         if not self._client:
             return None
@@ -36,6 +47,34 @@ class SpotifyService:
         except Exception:
             logger.exception("Error fetching current playback")
             return None
+
+    def play_track(self, track_id, fallback_device_id=None):
+        """Starts playing `track_id` now, replacing the current track.
+
+        Returns "played", or "opened" if playback control was refused (e.g.
+        403 Premium required / track restricted) and the track was opened in
+        the Spotify app instead. Raises on any other failure.
+        """
+        uri = f"spotify:track:{track_id}"
+        with self._lock:
+            self._ensure_client()
+            if not self._client:
+                raise RuntimeError("Spotify client unavailable")
+            try:
+                self._client.start_playback(uris=[uri])
+                return "played"
+            except SpotifyException as e:
+                if e.http_status == 404 and fallback_device_id:
+                    # NO_ACTIVE_DEVICE: Spotify is open but idle - target the
+                    # device we last saw playing explicitly
+                    logger.info("No active device; retrying on %s", fallback_device_id)
+                    self._client.start_playback(device_id=fallback_device_id, uris=[uri])
+                    return "played"
+                if e.http_status == 403:
+                    logger.warning("Playback control refused (%s); opening %s instead", e.msg, uri)
+                    os.startfile(uri)
+                    return "opened"
+                raise
 
     def _reset_auth(self):
         cache_path = getattr(self._client.auth_manager.cache_handler, 'cache_path', None)

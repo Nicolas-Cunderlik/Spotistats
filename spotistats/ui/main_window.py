@@ -1,16 +1,22 @@
 """Main GUI for Spotistats using services and worker threads for network tasks."""
 import logging
+import os
+import re
 from PyQt5.QtCore import Qt, QTimer, QEvent
 from PyQt5.QtGui import QIcon, QPixmap, QFont, QPainter, QBrush, QColor, QFontDatabase
-from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QFrame, QHBoxLayout, QApplication
+from PyQt5.QtWidgets import (QWidget, QLabel, QVBoxLayout, QFrame, QHBoxLayout, QApplication,
+                             QPlainTextEdit, QPushButton)
 
 from ..utils.logging_config import configure_logging
 from ..services.spotify_service import SpotifyService
 from ..services.ai_service import AIService
 from ..services.similarity_service import SimilarityService
 from ..workers.network_worker import FetchDataWorker
+from ..workers.playback_worker import PlayTrackWorker
 from ..services import spotify_window_service
 from .title_bar import TitleBar, TITLE_BAR_HEIGHT
+from .clickable_list import ClickableListBox
+from ..music.midi import progression_to_midi
 from MiscUtil import FullscreenImageWindow
 
 configure_logging()
@@ -25,28 +31,54 @@ POLL_MS_MIN = 500
 # Consecutive empty polls tolerated before treating playback as stopped, so a
 # single transient API hiccup doesn't flash the UI to "No song playing."
 IDLE_GRACE_POLLS = 3
+# After a click-to-play, how long to wait before re-polling - long enough for
+# Spotify to report the new track as current
+PLAY_REFRESH_DELAY_MS = 700
 
 # Docking is event-driven (WinEventHook on Spotify's window); this slow poll
 # only finds Spotify after it launches and acts as a safety net.
 DOCK_POLL_MS = 1000
 
-# Height of the main content below the title bar; the window may be taller
-# (padded to match Spotify) but never shorter
-CONTENT_HEIGHT = 564
+# Width shared by the album cover and the boxes beneath it
+CARD_WIDTH = 260
+# Black margin around the content. None on the right: Spotify's window, docked
+# against that edge, already has its own black padding on its left.
+CONTENT_MARGIN = 9
+WINDOW_WIDTH = 291  # 282px content frames + left margin only
+ANALYTICS_BOX_WIDTH = (CARD_WIDTH - 4) // 2
+ANALYTICS_BOX_HEIGHT = 150
 
-class ClickableLabel(QLabel):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        from PyQt5.QtCore import pyqtSignal
-        self.setCursor(Qt.PointingHandCursor)
-    def mousePressEvent(self, event):
-        from PyQt5.QtCore import Qt
-        if event.button() == Qt.LeftButton:
-            try:
-                self.clicked.emit()
-            except Exception:
-                pass
-    clicked = None
+_FEEDBACK_INPUT_STYLE = """
+QPlainTextEdit {
+    background-color: #141414; color: white; border: none; border-radius: 6px;
+    padding: 4px; font-size: 11px;
+}
+"""
+_FEEDBACK_BUTTON_STYLE = """
+QPushButton {
+    background-color: #3a3a3a; color: #B3B3B3; border: none; border-radius: 6px;
+    font-family: "Segoe MDL2 Assets"; font-size: 14px;
+}
+QPushButton:hover { background-color: #4a4a4a; color: white; }
+QPushButton:pressed { background-color: #555555; }
+"""
+
+MIDI_DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
+
+
+def _safe_filename(name, max_length=120):
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", name).strip(" .")
+    return name[:max_length] or "progression"
+
+
+def _unique_path(directory, filename):
+    """`filename` in `directory`, with " (2)", " (3)"... appended if taken."""
+    stem, ext = os.path.splitext(filename)
+    path, n = os.path.join(directory, filename), 2
+    while os.path.exists(path):
+        path, n = os.path.join(directory, f"{stem} ({n}){ext}"), n + 1
+    return path
+
 
 class SpotifyApp(QWidget):
     def __init__(self):
@@ -64,34 +96,33 @@ class SpotifyApp(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         # Width is fixed; height grows to match Spotify's (see _dock_to_spotify),
         # with the content as the floor - extra height is black padding below it
-        self.setFixedWidth(300)
-        self.setMinimumHeight(CONTENT_HEIGHT + TITLE_BAR_HEIGHT)
-        self.resize(300, CONTENT_HEIGHT + TITLE_BAR_HEIGHT)
-        self.setStyleSheet("background-color: black;")
+        # (minimum height is set from the content's natural height, below)
+        self.setFixedWidth(WINDOW_WIDTH)
+        self.setStyleSheet("""
+            QWidget { background-color: black; }
+            QToolTip { color: white; background-color: #282828; border: 1px solid #3a3a3a; padding: 4px; }
+        """)
 
         # UI elements
         self.layout = QVBoxLayout()
         self.title_frame = QFrame()
         self.stats_frame = QFrame()
-        self.ai_label_frame = QFrame()
-        self.similar_label_frame = QFrame()
 
-        self.title_frame.setFixedHeight(100)
-        self.ai_label_frame.setFixedWidth(128)
-        self.similar_label_frame.setFixedWidth(128)
+        # 93 rather than 100, with a 2px bottom margin below: the title font's
+        # descent is large (22px vs 46px ascent) and all-caps text never uses
+        # it, so centring the line box left the lettering 8px above centre.
+        # (Leaves 30px above the lettering and 31px below - the extra pixel
+        # was judged by eye on the real app.)
+        self.title_frame.setFixedHeight(93)
 
         self.title_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
         self.stats_frame.setStyleSheet("background-color: #141414; border-radius: 10px;")
-        self.ai_label_frame.setStyleSheet("background-color: #292929; border-radius: 8px;")
-        self.similar_label_frame.setStyleSheet("background-color: #292929; border-radius: 8px;")
 
         self.title_layout = QVBoxLayout()
         self.body_layout = QVBoxLayout()
         self.body_stats_layout = QHBoxLayout()
 
         self.title_label = QLabel("SPOTISTATS")
-        self.ai_label = QLabel("AI Suggestions loading...")
-        self.similar_label = QLabel("Similar Tracks loading...")
 
         self.album_cover_label = QLabel(self)
         self.album_cover_label.setPixmap(QPixmap(260, 260))
@@ -103,39 +134,43 @@ class SpotifyApp(QWidget):
         if font_families:
             iceberg_font = QFont(font_families[0], 30)
             self.title_label.setFont(iceberg_font)
-            self.ai_label.setFont(QFont(font_families[0], 10))
-            self.similar_label.setFont(QFont(font_families[0], 10))
 
         self.title_label.setStyleSheet("color: white;")
-        self.ai_label.setStyleSheet("color: white; font-size: 10px;")
-        self.similar_label.setStyleSheet("color: white; font-size: 10px;")
-        self.ai_label.setWordWrap(True)
-        self.similar_label.setWordWrap(True)
 
         self.title_layout.addWidget(self.title_label)
 
         # ai and similar-tracks frames
-        self.ai_label_layout = QVBoxLayout()
-        self.ai_label_layout.addWidget(self.ai_label)
-        self.ai_label_frame.setLayout(self.ai_label_layout)
+        font_family = font_families[0] if font_families else None
+        self.chord_box = ClickableListBox(
+            "AI Chord Suggestions", font_family, ANALYTICS_BOX_WIDTH, ANALYTICS_BOX_HEIGHT
+        )
+        self.chord_box.item_clicked.connect(self._download_progression)
 
-        self.similar_label_layout = QVBoxLayout()
-        self.similar_label_layout.addWidget(self.similar_label)
-        self.similar_label_frame.setLayout(self.similar_label_layout)
+        self.similar_tracks = ClickableListBox(
+            "Similar Tracks", font_family, ANALYTICS_BOX_WIDTH, ANALYTICS_BOX_HEIGHT
+        )
+        self.similar_tracks.item_clicked.connect(self._play_track)
 
-        self.body_stats_layout.addWidget(self.ai_label_frame)
+        # Exactly CARD_WIDTH wide and centred, flush with the cover above
+        self.body_stats_layout.setSpacing(0)
+        self.body_stats_layout.addStretch(1)
+        self.body_stats_layout.addWidget(self.chord_box)
         self.body_stats_layout.addSpacing(4)
-        self.body_stats_layout.addWidget(self.similar_label_frame)
+        self.body_stats_layout.addWidget(self.similar_tracks)
+        self.body_stats_layout.addStretch(1)
 
-        self.body_layout.addLayout(self.body_stats_layout)
-        self.body_layout.addSpacing(6)
+        self.feedback_frame = self._build_feedback_box(font_families[0] if font_families else None)
+
+        # Cover on top, then the analytics boxes, then feedback on those results
+        self.body_layout.setSpacing(8)
         self.body_layout.addWidget(self.album_cover_label, alignment=Qt.AlignCenter)
+        self.body_layout.addLayout(self.body_stats_layout)
+        self.body_layout.addWidget(self.feedback_frame, alignment=Qt.AlignCenter)
 
         self.title_layout.setAlignment(Qt.AlignCenter)
 
-        self.ai_label.setAlignment(Qt.AlignCenter)
-        self.similar_label.setAlignment(Qt.AlignCenter)
 
+        self.title_layout.setContentsMargins(9, 9, 9, 2)
         self.title_frame.setLayout(self.title_layout)
         self.stats_frame.setLayout(self.body_layout)
 
@@ -144,21 +179,25 @@ class SpotifyApp(QWidget):
         self.layout.addWidget(self.stats_frame)
         # Nested under the title bar, so it no longer gets the style's
         # top-level margins automatically
-        self.layout.setContentsMargins(9, 9, 9, 9)
+        # No top margin: the title frame sits directly under the title bar
+        self.layout.setContentsMargins(CONTENT_MARGIN, 0, 0, CONTENT_MARGIN)
         self.layout.setSpacing(0)  # gaps come from the explicit addSpacing calls
 
         root_layout = QVBoxLayout()
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
-        root_layout.addWidget(TitleBar(self, "Spotistats", 'SpotifyAppLogo.png'))
-        # Fixed-height container so the content keeps its exact layout and any
-        # extra window height lands in the stretch below as black padding
+        root_layout.addWidget(TitleBar(self, 'SpotifyAppLogo.png'))
+        # Fixed-height container (at the content's natural height) so the
+        # content keeps its exact layout and any extra window height lands in
+        # the stretch below as black padding
         content = QWidget()
         content.setLayout(self.layout)
-        content.setFixedHeight(CONTENT_HEIGHT)
+        content.setFixedHeight(content.sizeHint().height())
         root_layout.addWidget(content)
         root_layout.addStretch(1)
         self.setLayout(root_layout)
+        self.setMinimumHeight(content.height() + TITLE_BAR_HEIGHT)
+        self.resize(WINDOW_WIDTH, self.minimumHeight())
 
         # Services
         self.spotify_service = SpotifyService()
@@ -170,6 +209,10 @@ class SpotifyApp(QWidget):
         self.current_worker = None
         self._workers = []  # keeps superseded workers alive until they finish
         self._idle_streak = 0
+        self._play_worker = None
+        self._chord_suggestions = None  # ChordSuggestions for _chord_track, once ready
+        self._chord_track = None
+        self._last_device_id = None  # fallback target when Spotify has no active device
 
         # Timer - interval adapts based on playback state (see check_playback)
         self.timer = QTimer(self)
@@ -185,6 +228,47 @@ class SpotifyApp(QWidget):
 
         # Initial check
         self.check_playback()
+
+    def _build_feedback_box(self, font_family):
+        """Feedback on the current recommendations: optional free text, then
+        thumbs up/down. Not wired yet - the thumbs will be the submit trigger
+        and the text optional extra context (see feedback design notes)."""
+        frame = QFrame()
+        frame.setFixedWidth(CARD_WIDTH)
+        frame.setStyleSheet("background-color: #292929; border-radius: 8px;")
+
+        title = QLabel("Rate These Suggestions")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("color: white; font-size: 10px;")
+        if font_family:
+            title.setFont(QFont(font_family, 10))
+
+        self.feedback_input = QPlainTextEdit()
+        self.feedback_input.setPlaceholderText("Optional: what was off, or spot on?")
+        self.feedback_input.setFixedHeight(52)
+        self.feedback_input.setStyleSheet(_FEEDBACK_INPUT_STYLE)
+
+        # Segoe MDL2 Assets glyphs: Like / Dislike
+        self.feedback_up_btn = QPushButton("")
+        self.feedback_down_btn = QPushButton("")
+        buttons = QHBoxLayout()
+        buttons.setSpacing(6)
+        for btn, tip in ((self.feedback_up_btn, "Good suggestions"),
+                         (self.feedback_down_btn, "Poor suggestions")):
+            btn.setFixedHeight(30)
+            btn.setToolTip(tip)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.setStyleSheet(_FEEDBACK_BUTTON_STYLE)
+            buttons.addWidget(btn)
+
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+        layout.addWidget(title)
+        layout.addWidget(self.feedback_input)
+        layout.addLayout(buttons)
+        return frame
 
     def _dock_to_spotify(self):
         try:
@@ -285,6 +369,8 @@ class SpotifyApp(QWidget):
         try:
             state = self.spotify_service.current_playback()
             item = state.get('item') if state else None
+            if state and state.get('device'):
+                self._last_device_id = state['device'].get('id') or self._last_device_id
 
             if not item:
                 self._idle_streak += 1
@@ -308,8 +394,8 @@ class SpotifyApp(QWidget):
                 return
 
             self.last_song_id = track_id
-            self.ai_label.setText("AI Suggestions loading...")
-            self.similar_label.setText("Similar Tracks loading...")
+            self.chord_box.set_loading()
+            self.similar_tracks.set_loading()
             self.start_worker(item)
 
         except Exception:
@@ -327,8 +413,8 @@ class SpotifyApp(QWidget):
         return max(min(POLL_MS_ACTIVE, remaining_ms + 250), POLL_MS_MIN)
 
     def _show_idle(self):
-        self.ai_label.setText("AI Chord Suggestions\n\n-\n-\n-")
-        self.similar_label.setText("Similar Tracks\n\n-\n-\n-")
+        self.chord_box.set_idle()
+        self.similar_tracks.set_idle()
 
     def start_worker(self, track):
         # QThread.terminate() is unsafe if a worker is blocked in a network
@@ -336,6 +422,7 @@ class SpotifyApp(QWidget):
         # self._workers keeps it alive, and the sender checks below discard
         # its results once it's no longer self.current_worker.
         try:
+            self._chord_suggestions, self._chord_track = None, track
             worker = FetchDataWorker(track, self.ai_service, self.similarity_service)
             worker.album_bytes.connect(self.on_album_bytes)
             worker.ai_ready.connect(self.on_ai_ready)
@@ -371,30 +458,74 @@ class SpotifyApp(QWidget):
         except Exception:
             logger.exception("Failed to render album image")
 
-    def on_ai_ready(self, chords):
+    def on_ai_ready(self, suggestions):
         if self.sender() is not self.current_worker:
             return
         try:
-            if not chords:
-                self.ai_label.setText("AI Chord Suggestions\n\n-\n-\n-")
+            self._chord_suggestions = suggestions
+            if suggestions is None:
+                self.chord_box.set_placeholders(["Unavailable for", "this track"])
                 return
-            while len(chords) < 3:
-                chords.append("-")
-            self.ai_label.setText(f"AI Chord Suggestions\n\n{chords[0]}\n{chords[1]}\n{chords[2]}")
+            items = []
+            for i, progression in enumerate(suggestions.progressions):
+                symbols = " - ".join(chord.symbol for chord in progression.chords)
+                bars = sum(c.duration_beats for c in progression.chords) / progression.beats_per_bar
+                tooltip = (f"Click to download MIDI\n{progression.title}\n"
+                           f"{progression.key} · {progression.tempo_bpm} BPM · "
+                           f"{progression.beats_per_bar}/4 · {bars:g} bars\n{symbols}")
+                items.append((i, symbols, tooltip))
+            self.chord_box.set_items(items)
         except Exception:
-            logger.exception("Failed to update AI label")
+            logger.exception("Failed to update chord suggestions")
 
     def on_similar_ready(self, similar):
         if self.sender() is not self.current_worker:
             return
         try:
             if not similar:
-                self.similar_label.setText("Similar Tracks\n\nNot enough data\nfor this track")
+                self.similar_tracks.set_placeholders(["Not enough data", "for this track"])
                 return
-            lines = [f"{s['track_name']} - {s['track_artist']}" for s in similar]
-            self.similar_label.setText("Similar Tracks\n\n" + "\n".join(lines))
+            self.similar_tracks.set_items([
+                (t["track_id"], f"{t['track_name']} - {t['track_artist']}",
+                 f"Click to play now\n{t['track_name']} - {t['track_artist']}")
+                for t in similar
+            ])
         except Exception:
-            logger.exception("Failed to update similar tracks label")
+            logger.exception("Failed to update similar tracks")
+
+    def _play_track(self, track_id):
+        # One request at a time - ignore clicks while the last is in flight
+        if self._play_worker is not None and self._play_worker.isRunning():
+            return
+        worker = PlayTrackWorker(self.spotify_service, track_id, self._last_device_id, parent=self)
+        worker.succeeded.connect(self._on_play_succeeded)
+        worker.failed.connect(lambda tid: self.similar_tracks.flash(tid, "Couldn't play this track"))
+        self._play_worker = worker
+        worker.start()
+
+    def _download_progression(self, index):
+        suggestions, track = self._chord_suggestions, self._chord_track
+        if suggestions is None or track is None:
+            return
+        progression = suggestions.progressions[index]
+        try:
+            artist = ", ".join(a.get('name') for a in track.get('artists', []))
+            stem = f"{artist} - {track.get('name', 'Unknown')} - {index + 1} {progression.title}"
+            path = _unique_path(MIDI_DOWNLOAD_DIR, _safe_filename(stem) + ".mid")
+            os.makedirs(MIDI_DOWNLOAD_DIR, exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(progression_to_midi(progression))
+            logger.info("Saved MIDI to %s", path)
+            self.chord_box.flash(index, "Saved to Downloads")
+        except Exception:
+            logger.exception("Failed to save MIDI")
+            self.chord_box.flash(index, "Couldn't save MIDI")
+
+    def _on_play_succeeded(self, track_id, outcome):
+        logger.info("Similar track %s %s", track_id, outcome)
+        # Poll shortly instead of waiting out the current interval (up to
+        # POLL_MS_ACTIVE), so the cover/chords/similar tracks follow the click
+        QTimer.singleShot(PLAY_REFRESH_DELAY_MS, self.check_playback)
 
     def on_worker_error(self, msg):
         logger.error("Worker error: %s", msg)

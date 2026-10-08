@@ -4,19 +4,19 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QWidget, QLabel, QHBoxLayout, QPushButton
 
-TITLE_BAR_HEIGHT = 30
+TITLE_BAR_HEIGHT = 64  # matches Spotify's own title bar
 
 _BUTTON_STYLE = """
 QPushButton {{
-    background-color: transparent; color: white; border: none;
+    background-color: transparent; color: #B3B3B3; border: none;
     font-family: "Segoe MDL2 Assets"; font-size: 10px;
 }}
-QPushButton:hover {{ background-color: {hover}; }}
+QPushButton:hover {{ background-color: {hover}; color: white; }}
 QPushButton:pressed {{ background-color: {pressed}; }}
 """
 
 class TitleBar(QWidget):
-    def __init__(self, window, title, icon_path):
+    def __init__(self, window, icon_path):
         super().__init__(window)
         self._window = window
         self.setFixedHeight(TITLE_BAR_HEIGHT)
@@ -29,15 +29,12 @@ class TitleBar(QWidget):
 
         icon = QLabel()
         icon.setPixmap(QPixmap(icon_path).scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        title_label = QLabel(title)
-        title_label.setStyleSheet("color: white; font-size: 12px;")
 
         # Segoe MDL2 Assets glyph: ChromeClose
         close_btn = self._button("\uE8BB", "#e81123", "#f1707a")
         close_btn.clicked.connect(window.close)
 
         layout.addWidget(icon)
-        layout.addWidget(title_label)
         layout.addStretch()
         layout.addWidget(close_btn)
 

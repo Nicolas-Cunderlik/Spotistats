@@ -21,3 +21,6 @@ spotistats/ml/data/*.csv
 spotistats/ml/artifacts/
 # Ignore logs (may contain request details)
 *.log
+
+# Ignore runtime caches (regenerable)
+cache/
