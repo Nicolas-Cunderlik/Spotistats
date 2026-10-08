@@ -14,6 +14,7 @@ ARTIFACT_DIR = os.path.join(os.path.dirname(__file__), "artifacts")
 CSV_PATH = os.path.join(DATA_DIR, "spotify_songs.csv")
 
 N_NEIGHBORS = 4  # 3 similar tracks + the query track itself, which is always its own nearest neighbor
+                 # (SimilarityModel requests extra at query time to absorb its duplicate filter)
 
 
 def train(variant=features.DEFAULT_VARIANT):
@@ -28,11 +29,15 @@ def train(variant=features.DEFAULT_VARIANT):
     joblib.dump(index, os.path.join(ARTIFACT_DIR, "index.joblib"))
     joblib.dump(X, os.path.join(ARTIFACT_DIR, "features.joblib"))
     joblib.dump(variant, os.path.join(ARTIFACT_DIR, "variant.joblib"))
-    catalog[["track_id", "track_name", "track_artist"]].to_csv(
+    catalog[["track_id", "track_name", "track_artist", "alias_track_ids"]].to_csv(
         os.path.join(ARTIFACT_DIR, "track_meta.csv"), index=False
     )
 
-    print(f"Trained on {len(catalog)} unique tracks using variant '{variant}'")
+    stats = catalog.attrs["dedup"]
+    print(f"Deduplicated {stats['track_ids']} track ids into {stats['songs']} songs "
+          f"(merges: {stats['normalized_title']} by normalized title, "
+          f"{stats['fuzzy_title_and_audio']} by fuzzy title + audio)")
+    print(f"Trained on {len(catalog)} unique songs using variant '{variant}'")
     print(f"Artifacts written to {ARTIFACT_DIR}")
 
 

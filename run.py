@@ -3,7 +3,6 @@ Run with: python run.py
 """
 import sys
 import logging
-import pywinstyles
 from PyQt5.QtWidgets import QApplication
 from spotistats.ui.main_window import SpotifyApp
 
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = SpotifyApp()
-    pywinstyles.apply_style(window, "dark")
-    window.show()
+    # window.show() is intentionally omitted - the docking timer in
+    # SpotifyApp shows/hides the window as it tracks Spotify's window.
     logger.info("Spotistats started")
     sys.exit(app.exec_())

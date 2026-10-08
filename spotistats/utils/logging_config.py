@@ -22,5 +22,10 @@ def configure_logging():
     fh.setFormatter(fmt)
     root.addHandler(fh)
 
+    # Third-party DEBUG output is noisy; spotipy/urllib3's includes the client secret (Basic auth
+    # header) and refresh tokens - never let those reach the log.
+    for name in ("spotipy", "urllib3", "openai", "httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.INFO)
+
 # Auto-configure on import for convenience
 configure_logging()
