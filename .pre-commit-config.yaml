@@ -1,4 +1,4 @@
-# Install once per clone: pip install -r requirements-dev.txt && pre-commit install
+# Install once per clone: pip install -e ".[dev]" && pre-commit install
 # Run everything manually: pre-commit run --all-files   (CI runs the same)
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

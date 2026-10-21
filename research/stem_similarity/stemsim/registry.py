@@ -9,10 +9,16 @@ Stage outcomes:
   done         output written (`artifact` points at it)
   failed       tried and failed; retried on the next run unless the cause is permanent
   unavailable  can't be done with what we have (e.g. no audio source yet)
+
+Different stages run side by side, but two copies of the SAME stage would
+fetch the same rows and write the same files - registry.exclusive(name)
+refuses to start a second one.
 """
 
 import json
+import os
 import sqlite3
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -77,6 +83,29 @@ class Registry:
         path = self.data_dir / "audio" / source
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    @contextmanager
+    def exclusive(self, name):
+        """Holds an OS file lock for the duration, so only one process runs
+        `name` at a time. The OS releases it when the process exits, even on a
+        crash, so a stale lock can never block a later run."""
+        path = self.data_dir / "locks" / f"{name}.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(path, "a+")  # noqa: SIM115 - held open for the lock's lifetime
+        try:
+            _lock(handle)
+        except OSError:
+            handle.close()
+            raise SystemExit(f"Another process is already running {name!r} - not starting a second one") from None
+        try:
+            handle.seek(0)
+            handle.truncate()
+            handle.write(str(os.getpid()))
+            handle.flush()
+            yield
+        finally:
+            _unlock(handle)
+            handle.close()
 
     @contextmanager
     def transaction(self):
@@ -177,3 +206,24 @@ class Registry:
                LEFT JOIN stage_status s ON s.track_id = m.track_id AND s.stage = 'audio'
                GROUP BY d.name ORDER BY d.name"""
         ).fetchall()
+
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def _lock(handle):
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+
+    def _unlock(handle):
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+else:
+    import fcntl
+
+    def _lock(handle):
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def _unlock(handle):
+        fcntl.flock(handle, fcntl.LOCK_UN)

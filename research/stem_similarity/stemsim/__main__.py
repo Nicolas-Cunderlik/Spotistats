@@ -12,6 +12,7 @@ Every command is safe to re-run and to run alongside the others.
 """
 
 import argparse
+import contextlib
 import logging
 import sys
 
@@ -56,17 +57,24 @@ def main(argv=None):
             print(f"{name:16s} {adapter.target:11s} {adapter.metric or '-':18s} {adapter.url}")
     elif args.command == "ingest":
         options = {"cultures": None} if args.all_cultures else {}
-        ingest.ingest(
-            registry,
-            args.dataset,
-            fetch=not args.no_fetch,
-            adapter_options=options,
-            with_audio=args.with_audio,
-            limit=args.limit,
-            progress=_progress,
-        )
+        with registry.exclusive(f"ingest-{args.dataset}"):
+            ingest.ingest(
+                registry,
+                args.dataset,
+                fetch=not args.no_fetch,
+                adapter_options=options,
+                with_audio=args.with_audio,
+                limit=args.limit,
+                progress=_progress,
+            )
     elif args.command == "audio":
-        print(audio.run(registry, source=args.source, dataset=args.dataset, limit=args.limit))
+        # One process per audio source (they'd write the same files); without
+        # --source this run touches every source, so it holds all their locks
+        sources = [args.source] if args.source else [*audio.RESOLVERS, "other"]
+        with contextlib.ExitStack() as locks:
+            for source in sources:
+                locks.enter_context(registry.exclusive(f"audio-{source}"))
+            print(audio.run(registry, source=args.source, dataset=args.dataset, limit=args.limit))
     elif args.command == "status":
         print(
             f"{'dataset':16s} {'target':11s} {'metric':18s} {'tracks':>7s} {'judgm.':>7s} "

@@ -40,3 +40,15 @@ def test_pending_skips_finished_tracks(registry):
     )
     registry.set_status("mtat:0", "audio", DONE, artifact="audio/mtat/0.mp3")
     assert [row["track_id"] for row in registry.pending("audio")] == ["mtat:1", "mtat:2"]
+
+
+def test_exclusive_refuses_a_second_holder(registry):
+    import pytest
+
+    with registry.exclusive("audio-deezer"):
+        with pytest.raises(SystemExit, match="already running"), registry.exclusive("audio-deezer"):
+            pass
+        with registry.exclusive("audio-mtat"):  # other stages are unaffected
+            pass
+    with registry.exclusive("audio-deezer"):  # released on exit
+        pass

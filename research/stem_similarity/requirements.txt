@@ -1,6 +1,7 @@
 # Research venv (Python 3.13). Install torch first from the CUDA index:
 #   python -m pip install torch==2.14.1 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu126
 #   python -m pip install -r requirements.txt
+#   python -m pip install --no-deps -e ../..   (the app package, for its dedup/catalog code - not its GUI deps)
 demucs==4.1.0
 muq==0.1.0
 # MuQ-MuLan breaks on transformers 5.x (EasyDict config has no _attn_implementation)
@@ -12,3 +13,5 @@ pandas==3.0.6
 scipy==1.18.1
 scikit-learn==1.9.1
 joblib==1.6.0
+platformdirs==4.13.5  # spotistats.config
+pytest==9.1.1
