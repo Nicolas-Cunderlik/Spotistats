@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS memberships (
 );
 CREATE TABLE IF NOT EXISTS judgments (
     id INTEGER PRIMARY KEY, dataset TEXT NOT NULL, kind TEXT NOT NULL,
-    a TEXT NOT NULL, b TEXT NOT NULL, c TEXT, value REAL, weight REAL, grp TEXT
+    a TEXT NOT NULL, b TEXT NOT NULL, c TEXT, value REAL, weight REAL, grp TEXT,
+    facet TEXT NOT NULL DEFAULT 'overall', meta TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS judgments_dataset ON judgments (dataset);
 CREATE TABLE IF NOT EXISTS stage_status (
@@ -56,6 +57,16 @@ class Registry:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(_SCHEMA)
+        self._migrate()
+
+    def _migrate(self):
+        """Columns added after a registry was first created."""
+        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(judgments)")}
+        with self.transaction() as db:
+            if "facet" not in columns:
+                db.execute("ALTER TABLE judgments ADD COLUMN facet TEXT NOT NULL DEFAULT 'overall'")
+            if "meta" not in columns:
+                db.execute("ALTER TABLE judgments ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'")
 
     def raw_dir(self, dataset):
         path = self.data_dir / "raw" / dataset
@@ -99,8 +110,12 @@ class Registry:
             )
             db.execute("DELETE FROM judgments WHERE dataset = ?", (adapter.name,))
             db.executemany(
-                "INSERT INTO judgments (dataset, kind, a, b, c, value, weight, grp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                [(adapter.name, j.kind, j.a, j.b, j.c, j.value, j.weight, j.group) for j in normalized.judgments],
+                "INSERT INTO judgments (dataset, kind, a, b, c, value, weight, grp, facet, meta)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (adapter.name, j.kind, j.a, j.b, j.c, j.value, j.weight, j.group, j.facet, json.dumps(j.meta))
+                    for j in normalized.judgments
+                ],
             )
             db.execute(
                 "INSERT OR REPLACE INTO datasets VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

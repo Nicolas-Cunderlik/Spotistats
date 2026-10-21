@@ -14,7 +14,11 @@ Judgment    One ground-truth statement, of one of two kinds:
               pair     sim(a, b) = value, on a 0-1 scale
             `weight` is how much evidence backs it (votes, raters); `group`
             ties judgments that are scored together (e.g. one Last.fm seed's
-            ranked list).
+            ranked list); `facet` says what was compared - the whole song
+            ("overall") or one part of it (a stem: "drums", "bass", "vocals",
+            "other") or one musical attribute ("melody", "harmony", "rhythm",
+            "voice", "timbre"); `meta` keeps whatever else the rater said (reason tags,
+            free-text notes) for analysis.
 
 Adapters also declare a target (what kind of similarity the people behind the
 data were expressing) and a metric (how a model is scored against it), so
@@ -38,6 +42,11 @@ SEEDS = "seeds"  # no judgments - a pool of tracks other datasets build on
 TRIPLET_AGREEMENT = "triplet_agreement"  # share of triplets the model orders the same way
 SPEARMAN = "spearman"  # rank correlation of model similarity with pair scores
 NDCG = "ndcg"  # ranking quality per group, pair values as graded relevance
+
+# Facets - what a judgment compared
+OVERALL = "overall"
+STEM_FACETS = ("drums", "bass", "vocals", "other")  # Demucs htdemucs stems
+ATTRIBUTE_FACETS = ("melody", "harmony", "rhythm", "voice", "timbre")  # MATCHA's musical attributes
 
 
 @dataclass(frozen=True)
@@ -67,6 +76,8 @@ class Judgment:
     value: float = 1.0
     weight: float = 1.0
     group: str | None = None
+    facet: str = OVERALL
+    meta: dict = field(default_factory=dict, compare=False, hash=False)
 
     def __post_init__(self):
         if self.kind not in JUDGMENT_KINDS:

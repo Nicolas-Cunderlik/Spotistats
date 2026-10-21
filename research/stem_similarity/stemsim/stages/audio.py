@@ -3,6 +3,7 @@
 One resolver per Track.audio_source, so a new audio source is one class:
   deezer  30 s preview found by artist + title (same matching rules as the
           app's dedup: same artist, similar title, close duration when known)
+  pilot   the pilot's previews in research/stem_similarity/audio/ (what was rated)
   mtat    clip extracted from the MagnaTagATune archive (fetched by
           `ingest magnatagatune --with-audio`); waits, without failing, until
           the archive exists
@@ -16,11 +17,13 @@ next run; "no match on Deezer" is `unavailable` (re-check by clearing it).
 import hashlib
 import json
 import logging
+import os
 import urllib.error
 import zipfile
 
 from spotistats.ml import dedup
 
+from .. import config
 from ..datasets.base import RateLimiter, download, http_get
 from ..datasets.magnatagatune import archive_path
 from ..registry import DONE, FAILED, UNAVAILABLE
@@ -50,12 +53,18 @@ class DeezerResolver:
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             return FAILED, f"search failed: {exc}", None
         want_artist = dedup.normalize_artist(track["artist"])
-        for hit in hits:
-            if not hit.get("preview") or dedup.normalize_artist(hit["artist"]["name"]) != want_artist:
-                continue
-            if not dedup.titles_similar(track["title"], hit["title"]):
-                continue
-            if duration and abs(hit["duration"] - duration) > self.DURATION_TOLERANCE_S:
+        candidates = [
+            hit
+            for hit in hits
+            if hit.get("preview")
+            and dedup.normalize_artist(hit["artist"]["name"]) == want_artist
+            and not (duration and abs(hit["duration"] - duration) > self.DURATION_TOLERANCE_S)
+        ]
+        # Exact (normalized) title matches first, then fuzzy plain-version matches
+        wanted = dedup.normalize_title(track["title"])
+        ranked = sorted(candidates, key=lambda hit: dedup.normalize_title(hit["title"]) != wanted)
+        for hit in ranked:
+            if not same_recording(track["title"], hit["title"]):
                 continue
             name = hashlib.sha1(track["track_id"].encode(), usedforsecurity=False).hexdigest()[:20] + ".mp3"
             path = self.registry.audio_dir(self.source) / name
@@ -64,8 +73,33 @@ class DeezerResolver:
                 download(hit["preview"], path)
             except (urllib.error.URLError, TimeoutError) as exc:
                 return FAILED, f"preview download failed: {exc}", None
-            return DONE, f"deezer:{hit['id']}", str(path.relative_to(self.registry.data_dir))
+            detail = json.dumps({"deezer_id": hit["id"], "deezer_title": hit["title"]})
+            return DONE, detail, str(path.relative_to(self.registry.data_dir))
         return UNAVAILABLE, "no matching Deezer preview", None
+
+
+def same_recording(wanted_title, found_title):
+    """Whether a search hit is the recording we asked for, not another version.
+
+    Equal after the app's title normalization (packaging like "feat." or
+    "Remastered" dropped) is a match. Beyond that, a fuzzy match (typos,
+    punctuation) is only trusted between two plain titles - if either names a
+    distinct recording ("Remix", "Live", "Acoustic", "Extended", or anything
+    unrecognised), it must match exactly. Measured on the 300-song pilot: the
+    old fuzzy-only rule accepted ~20 wrong versions (another remix, the live
+    cut, the extended mix)."""
+    wanted, found = dedup.normalize_title(wanted_title), dedup.normalize_title(found_title)
+    if wanted == found:
+        return True
+    if _version_words(wanted) != _version_words(found):
+        return False  # e.g. "I Wanna Rock" vs "I Wanna Rock Nasty Mix" - no brackets to split on
+    plain = wanted == dedup.base_title(wanted_title) and found == dedup.base_title(found_title)
+    return plain and dedup.titles_similar(wanted_title, found_title)
+
+
+def _version_words(normalized_title):
+    """Words marking a distinct recording (remix, live, acoustic...) anywhere in the title."""
+    return {m.group(0) for m in dedup._DISTINCT.finditer(dedup._CANONICAL_MIX.sub("", normalized_title))}
 
 
 class MtatResolver:
@@ -91,6 +125,22 @@ class MtatResolver:
         return DONE, None, str(path.relative_to(self.registry.data_dir))
 
 
+class PilotResolver:
+    """The pilot's own Deezer previews (research/stem_similarity/audio/), kept
+    as-is because they're exactly what the listener rated."""
+
+    source = "pilot"
+
+    def __init__(self, registry):
+        self.registry = registry
+
+    def resolve(self, track):
+        path = config.ROOT / track["audio_ref"]
+        if not path.exists():
+            return UNAVAILABLE, f"pilot file missing: {track['audio_ref']}", None
+        return DONE, None, os.path.relpath(path, self.registry.data_dir)
+
+
 class NoSourceResolver:
     def __init__(self, source):
         self.source = source
@@ -99,7 +149,7 @@ class NoSourceResolver:
         return UNAVAILABLE, f"no audio source for {self.source!r} yet", None
 
 
-RESOLVERS = {resolver.source: resolver for resolver in (DeezerResolver, MtatResolver)}
+RESOLVERS = {resolver.source: resolver for resolver in (DeezerResolver, MtatResolver, PilotResolver)}
 
 
 def run(registry, source=None, dataset=None, limit=None):

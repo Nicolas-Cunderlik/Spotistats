@@ -2,11 +2,16 @@
 new module here (see base.py for the contract) and register it below."""
 
 from .ccmsim import CCMSim
+from .dim_sim import DimSim
 from .lastfm import LastFm
+from .listener_abx import ListenerAbx
 from .magnatagatune import MagnaTagATune
+from .matcha import Matcha
 from .spotify_catalog import SpotifyCatalog
 
-ADAPTERS = {adapter.name: adapter for adapter in (SpotifyCatalog, MagnaTagATune, CCMSim, LastFm)}
+ADAPTERS = {
+    adapter.name: adapter for adapter in (SpotifyCatalog, ListenerAbx, DimSim, MagnaTagATune, Matcha, CCMSim, LastFm)
+}
 
 
 def get_adapter(name, **options):

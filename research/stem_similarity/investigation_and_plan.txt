@@ -266,6 +266,18 @@ The listener (project author) rates triplets.
 
 9.2 Targets
 
+  T0 Perceptual, expert - the author's own ABX ratings (listener_abx adapter,
+     ratings.jsonl): a music producer judging sound selection, with per-stem
+     ratings (facet = drums/bass/vocals/other), reason tags and notes. Small
+     (19 so far) but the most specific signal; the held-out check that
+     matters most. Grows with short rating sessions on informative triplets.
+  T1a Perceptual - DIM-SIM (Lee et al. ICASSP 2020, zenodo 3889149): direct
+     "is song 1 or 2 closer to the anchor?" votes - 3,781 untied triplets,
+     39,440 votes (5-12 raters each), 879 flagged clean (>= 90% agreement).
+     MSD ids -> artist/title via MSD unique_tracks.txt -> Deezer previews.
+     Caveat: votes were on specific 3 s moments of 7digital previews (start
+     times kept in meta); Deezer previews cover other moments - song-level
+     evidence. CC BY-NC 4.0.
   T1 Perceptual - MagnaTagATune "odd one out" (TagATune bonus game):
      346 unique triplets, ~7,650 votes, 1,019 clips (audio: 3 x 1 GB zip,
      32 kbps MP3). Majority outlier c of (a, b, c) gives two constraints:
@@ -279,6 +291,14 @@ The listener (project author) rates triplets.
      pairs rated for overall similarity, about 1 rating each, mostly
      non-Western. Use the MagnaTagATune/FMA (Western) subset, scored with
      Spearman correlation.
+  Checked, not usable (2026-10-20):
+     "MuSHeRD" - no such dataset found in the literature.
+     Spotify Music Streaming Sessions (skips) - track ids are anonymized and
+       carry no artist/title, so no audio can be fetched; challenge closed.
+     Inst-Sim-ABX (Hashizume et al., per-instrument ABX, 586 listeners) -
+       ideal for stem facets but not publicly released; worth asking the
+       authors.
+     MATCHA (attribute-level triplets) - no public release found.
   Not used: AIME (disco-eth/AIME, 62 GB). Its 15,600 human judgments are
      pairwise music-quality and text-audio-alignment preferences between
      mostly AI-generated tracks. No reference song, so no similarity signal.
@@ -312,15 +332,26 @@ The listener (project author) rates triplets.
   Rate limits, retries and caches live inside each stage. A Last.fm or Deezer
   outage stalls only that stage, never the GPU.
 
-9.4 Budget (estimates, measured as each stage runs)
+9.4 Budget (measured on the first ~1-2k items, 2026-10-20)
 
-  Last.fm   25.6k seeds at ~4 req/s                ~2 h
-  Deezer    ~25k previews                          ~3-4 h, ~13 GB
-  GPU       Demucs ~0.9 s + MuQ ~0.2 s per track   ~8 h for 25.6k (the pilot's
-            2.9 s/song included CPU work that now moves to S5b)
-  Stems     excerpt OGGs                           ~10 GB
-  MTAT      3 GB download, 1,019 clips             < 1 h
-  The audio root is configurable, so bulk audio can live on D:.
+  Last.fm raw   16.5 KB/seed x 25.6k                 ~0.4 GB, ~2.5 h
+                (31% of seeds get a list; similar songs outside the catalog
+                are NOT given audio - that would be ~150k songs / ~70 GB)
+  Deezer        467 KB/preview x ~24k catalog songs  ~11 GB, ~6 h
+  MTAT          3.3 GB archive (+0.1 GB extracted clips; archive deletable)
+  Stems         ~720 KB per song per 10 s window (5 OGGs) - kept only for
+                rated / perceptual-eval tracks (~1-2k songs, ~1.5 GB); catalog
+                songs keep embeddings only (would be ~18 GB as stems)
+  Embeddings    ~20 KB/song (5 stems x 2 windows x 512 floats)  ~0.5 GB
+  Total         ~16 GB on C: (research/stem_similarity/data, gitignored)
+
+9.5 Data quality
+
+  Deezer search can return another version of a song (a different remix, the
+  live or acoustic cut). The pilot's fuzzy matching accepted ~20 of 300 such
+  mismatches; stages/audio.same_recording now requires version words (remix,
+  live, acoustic, extended...) to match exactly. listener_abx keeps the
+  pilot's audio regardless - the ratings judged what was actually heard.
 
 ======================================================================
 SOURCES
@@ -339,3 +370,4 @@ SOURCES
   CCMSim (TISMIR)               https://transactions.ismir.net/articles/10.5334/tismir.341
   AIME / AIME-survey            https://huggingface.co/datasets/disco-eth/AIME
   MSD Last.fm dataset           https://auditory.org/postings/2011/794.html
+  DIM-SIM                       https://zenodo.org/records/3889149
