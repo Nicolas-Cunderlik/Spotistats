@@ -1,0 +1,24 @@
+# Install once per clone: pip install -r requirements-dev.txt && pre-commit install
+# Run everything manually: pre-commit run --all-files   (CI runs the same)
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      # Datasets, model artifacts, preview audio and built exes all live near
+      # the code - keep them out of git
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format

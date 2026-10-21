@@ -1,9 +1,0 @@
-PyQt5
-pywinstyles
-requests
-spotipy
-openai
-pandas
-numpy
-scikit-learn
-joblib

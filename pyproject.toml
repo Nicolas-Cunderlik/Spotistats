@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spotistats"
+version = "0.1.0"
+description = "Song insights docked beside the Spotify desktop app: AI chord progressions and similar tracks."
+readme = "README.md"
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
+authors = [{ name = "Nicolas Cunderlik", email = "nicolas7cunderlik@gmail.com" }]
+requires-python = ">=3.13"
+# An application, not a library: exact pins so every install runs what was tested
+dependencies = [
+    "PyQt5==5.15.11",
+    "requests==2.34.2",
+    "spotipy==2.26.0",
+    "openai==2.41.0",
+    "pydantic==2.13.4",
+    "pandas==3.0.3",
+    "numpy==2.4.6",
+    "scikit-learn==1.9.0",
+    "joblib==1.5.3",
+    "platformdirs==4.13.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pre-commit==4.7.0",
+    "ruff==0.17.1",  # keep in step with the rev in .pre-commit-config.yaml
+    "pyinstaller==6.22.3",
+]
+
+[project.scripts]
+spotistats = "spotistats.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+spotistats = ["assets/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = ["build", "dist"]
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I isort, B bugbear, UP pyupgrade, S bandit
+select = ["E", "W", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is how pytest checks
+# Offline research scripts: fixed https URLs, a fixed ffmpeg binary, and
+# random sampling for experiment design (not cryptography)
+"research/**" = ["S310", "S311", "S603"]
+"research/**/tests/**" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "preserve"  # the codebase mixes quote styles; don't churn every line
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"

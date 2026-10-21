@@ -1,0 +1,341 @@
+STEM-BASED PERCEPTUAL SONG SIMILARITY - INVESTIGATION AND PLAN
+Spotistats research track, started 2026-10-19
+
+======================================================================
+1. MOTIVATION
+======================================================================
+
+Spotistats recommends similar songs with a k-nearest-neighbor search over
+Spotify's legacy audio features (danceability, energy, valence, tempo, ...)
+for a static catalog of ~25.6k songs (TidyTuesday Spotify dataset, 2020).
+
+Question: what does "similar" actually mean, and how do we measure it?
+
+Working hypothesis: two songs sound similar when their component parts sound
+alike - drums/percussion (the same clap sample makes two songs feel related),
+bass, other instruments, vocals, and the overall "atmosphere" of the mix
+(reverb, space, texture). Separate each song into stems, measure timbre
+similarity per stem, and combine. Some stems will be more reliable or matter
+more than others, so the combination weights must be learned, not assumed.
+
+======================================================================
+2. WHAT WE FOUND SO FAR
+======================================================================
+
+2.1 The current model and its yardstick
+
+  - Features: 13 standardized Spotify audio features (key as sin/cos at
+    0.25 weight), plus the 6 class probabilities of a genre classifier
+    (HistGradientBoosting, weight 2). Cosine kNN.
+  - Evaluation: genre precision@3 ~0.43, subgenre precision@3 ~0.18.
+  - Problem: genre agreement is a weak stand-in for similarity. Six playlist
+    genres say little about whether two songs actually sound alike.
+
+2.2 Label proxies, tested and rejected
+
+  Literature (Berenzweig/Ellis et al. ISMIR 2003; McFee et al. 2012;
+  van den Oord et al. NeurIPS 2013) treats playlist / listening co-occurrence
+  as the standard similarity ground truth. Our CSV has 471 playlists, so we
+  scored candidate models on same-playlist precision@3 (chance ~0.4%):
+
+    setup                               playlist@3 (song / unseen-artist split)
+    audio features only                 4.1% / 3.8%
+    + genre classifier (shipped)        4.3% / 3.9%
+    learned per-feature diag weights    3.5% / 3.2%
+    playlist-classifier embedding       5.0% / 4.6%
+    playlist-classifier + release year  8.7% / 8.0%
+
+  Takeaways: global per-feature weights don't help; release year (era) is the
+  strongest metadata signal. But playlists, subgenres and genres all measure
+  the context a song appeared in, not how it sounds. All three were rejected
+  as the ground truth for this project.
+
+2.3 Closest prior work
+
+  Vohra & Akama, "Interpretable and Perceptually-Aligned Music Similarity
+  with Pretrained Embeddings", arXiv:2601.19109 (Jan 2026):
+    - Demucs v4 separation (4-stem htdemucs; 6-stem adds guitar/piano)
+    - Frozen pretrained embeddings per stem (CLAP, MuQ-MuLan), cosine sim
+    - Per-stem similarities combined linearly; weights fit on human ABX
+      listening judgments (Inst-Sim-ABX, ~330 triplets, 281 listeners)
+    - Agreement with humans: mix-only MuQ-MuLan 86.8% -> stem-weighted 90.4%
+    - Learned weights (MuQ, 4-stem): drums 0.78, bass 0.25, vocals 0.08,
+      other 0.86, full mix 1.94
+    - 4-stem separation more robust; guitar/piano stems suffer bleed
+  Limits we can address: their audio is MIDI-synthesized (Slakh) with no
+  vocals, 5-second clips, and population-average weights.
+
+2.4 Design decisions from the investigation
+
+  - No raw waveform comparison. Identical sounds offset by milliseconds or
+    mixed differently have ~zero waveform correlation. Compare learned
+    embeddings / timbre descriptors instead.
+  - No pitch or tempo normalization. Pretrained embeddings pooled over time
+    are largely key/tempo tolerant. Pitch-shifting and time-stretching alter
+    timbre (a kick shifted 5 semitones is a different kick) and depend on
+    error-prone key/BPM estimates. Key and tempo stay as optional separate
+    terms.
+  - No single-note isolation. That's a transcription problem the embedding
+    approach doesn't need. Phase-2 idea for the "same clap" case: detect
+    individual hits in the drum stem and compare sets of hit embeddings.
+  - "Atmosphere" is a property of the whole mix, so the full mix is kept as
+    its own "stem" alongside drums / bass / vocals / other.
+  - Audio source is the Deezer 30-second preview, never the audio playing on
+    the user's device. Lookup by ISRC (Spotify track external_ids.isrc ->
+    Deezer /track/isrc:...), or by artist + title search for catalog songs.
+
+======================================================================
+3. GROUND TRUTH: THE LISTENER'S OWN JUDGMENTS
+======================================================================
+
+[Superseded 2026-10-20: rating 400 triplets by hand was too slow. The ~20
+ratings collected are kept in ratings.jsonl, but ground truth now comes from
+public datasets - see section 9. The protocol below still describes how
+triplet judgments are scored.]
+
+With label proxies rejected, the remaining ground truth is human perception.
+The listener (project author) rates triplets.
+
+3.1 Primary task: ABX forced choice on the full mix
+
+  Hear reference X and candidates A and B (same 10 s excerpt window of each
+  preview, instant switching). Answer: "Which sounds more like X?"
+  -> A / B / can't tell.
+
+  Why forced choice instead of 1-10 ratings or free text:
+    - Relative judgments are far more consistent than absolute scales, which
+      drift within and between sessions.
+    - Each answer is directly a training constraint:
+      sim(X,A) > sim(X,B).
+    - Same protocol as the prior work, so results are comparable.
+
+  Why the full mix rather than stem pairs: the goal is to predict whole-song
+  similarity. If the listener only rates drum stems, we learn whether the
+  drum embedding matches drum perception, but not how much drums matter
+  relative to bass or vocals overall. Stem weights are inferred from
+  full-mix answers.
+
+3.2 Secondary task: per-stem ABX (small subset)
+
+  Same protocol on isolated stems (e.g. drums-only X/A/B). It measures
+  whether each stem's embedding agrees with perception of that stem, i.e.
+  stem reliability, separately from stem importance.
+
+3.3 Feedback richness: structured tags + optional free text
+
+  After each full-mix answer, optional one-click "because of" tags:
+    drums/percussion | bass | vocals | instruments/melody |
+    atmosphere/space | groove/tempo | era/production
+  plus an optional free-text note.
+
+  - Tags are cheap and directly analyzable: they say which stem drove a
+    decision, an extra signal for the stem weights.
+  - Free text is kept for qualitative analysis. MuQ-MuLan is a joint
+    text-audio model, so notes like "airy reverb pads" can later be embedded
+    and tested against the chosen song - a possible research angle.
+  - Free text is optional, so rating stays fast. The fitting never depends
+    on it.
+
+3.4 Triplet selection (where the information is)
+
+  Random triplets are mostly obvious or mostly noise. Pilot mix:
+    50% stem-disagreement: A is X's nearest neighbor by one stem (e.g.
+        drums), B by another (e.g. bass). The answer reveals which stem
+        matters more. This is the most informative type.
+    30% near vs far: A from X's top neighbors, B random. Sanity / anchor.
+    20% random vs random: calibration, guards against selection bias.
+  Plus ~10% repeats with A/B swapped, to measure self-consistency (the
+  noise ceiling no model can beat).
+
+  Target: ~300 judgments in sessions of ~50 (~25 s each, ~20 min/session).
+
+======================================================================
+4. PILOT (300 songs)
+======================================================================
+
+  Step 1  Sample 300 catalog songs, stratified across the 24 subgenres
+          (diversity only - subgenre is not used as ground truth).
+  Step 2  Fetch Deezer previews (artist + title search, duration and fuzzy
+          title check). Cache MP3s locally, never redistributed.
+  Step 3  Separate with Demucs htdemucs (4 stems). Reuse the checkpoint
+          already shipped with Ultimate Vocal Remover.
+  Step 4  Embed mix + drums + bass + vocals + other with MuQ-MuLan (frozen,
+          512-d), on the 10 s rating excerpt and on the full 30 s. Also
+          compute per-stem RMS energy (silence gating) and MFCC statistics
+          (classic, interpretable timbre baseline).
+  Step 5  Sanity checks: silent-stem rates, hubness (k-occurrence skew),
+          listen to some neighbor lists.
+  Step 6  Local rating app (localhost page, ratings to JSONL).
+  Step 7  Fit and evaluate (section 5).
+
+  Everything except Demucs and MuQ is already in the stack. Research code
+  lives in its own venv (research/stem_similarity/.venv) so the app's
+  environment stays light until we decide to ship.
+
+======================================================================
+5. EVALUATION
+======================================================================
+
+  Main metric: ABX agreement on held-out judgments (100 random 70/30
+  splits, mean +- std), compared across:
+    random (50%) | current Spotify-feature kNN | MFCC baseline |
+    MuQ mix only | MuQ stems, equal weights | MuQ stems, fitted weights |
+    fitted weights + release year/key/tempo terms
+  Ceiling: listener self-consistency on repeated triplets.
+
+  Weight fitting: same as prior work, a linear model on per-stem cosine
+  differences, sim(X,A)-sim(X,B) per stem -> choice (logistic or ridge,
+  non-negative weights). Bootstrap confidence intervals on each weight
+  answer "which stems matter / are reliable".
+
+  Secondary analyses:
+    - per-stem ABX agreement (stem reliability vs importance)
+    - tag frequencies vs fitted weights (do stated reasons match weights?)
+    - do genre/playlist agreement predict the listener's choices?
+      (quantifies how bad the label proxies really are)
+
+======================================================================
+6. KNOWN BIASES AND HOW WE HANDLE THEM
+======================================================================
+
+  Silent stems     No bass -> near-silent stem whose embedding matches all
+                   other silent stems. Gate by RMS energy, drop that stem
+                   term, renormalize the weights.
+  Separation bleed "other" is a catch-all and leaks. Use 4-stem, not 6-stem.
+                   Per-stem ABX measures the damage.
+  Hubness          A few songs become everyone's neighbor in high-d cosine
+                   space. Measure k-occurrence skew, apply mutual-proximity
+                   normalization if needed.
+  Excerpt choice   One 30 s preview (and a 10 s window of it) may not
+                   represent the song. The model is evaluated on exactly what
+                   the listener heard, and full-preview embeddings are
+                   compared separately.
+  Single listener  Weights are personal. That's a feature for the app, but a
+                   limitation for general claims.
+  Order effects    Randomize A/B order and triplet order. Repeats measure
+                   drift.
+  Codec            All audio is the same Deezer preview codec. Uniform,
+                   which is good.
+
+======================================================================
+7. PUBLISHING / SHOWING IT OFF
+======================================================================
+
+  Realistic first venue: an ISMIR Late-Breaking/Demo extended abstract
+  (short, low bar, demo-friendly), plus a write-up and an open repo.
+
+  Possible contributions over prior work:
+    1. Stem-weighted similarity on real commercial music, vocals included
+       (the prior work used synthetic, vocal-free audio).
+    2. Personalized vs population stem weights.
+    3. A direct measurement of how poorly genre / playlist / Spotify
+       audio-feature similarity predicts perceived similarity.
+    4. Free-text listener notes vs text-audio embeddings.
+
+  To strengthen beyond a demo: recruit 5-10 additional raters (same app).
+  That gives inter-rater agreement and population weights, and turns n=1
+  into a real study.
+
+  Reproducibility: previews can't be redistributed. Release Deezer/Spotify
+  track IDs, ratings, embeddings and code. Check the model licenses (MuQ-MuLan
+  weights are believed to be non-commercial; fine for research, verify
+  before shipping in the app).
+
+======================================================================
+8. LATER: SHIPPING IN THE APP
+======================================================================
+
+  New song -> Spotify ISRC -> Deezer preview -> Demucs -> MuQ stem
+  embeddings -> weighted kNN over precomputed catalog stem embeddings.
+  Few seconds on GPU (RTX 3070), tens of seconds on CPU. FreqBlog audio
+  features become a supporting signal (tempo/key/era terms) instead of the
+  primary one. Full-catalog embedding is a one-off batch job (~a day of GPU
+  time, to be measured in the pilot).
+
+======================================================================
+9. PIPELINE V2: DATASET-DRIVEN GROUND TRUTH (2026-10-20)
+======================================================================
+
+9.1 Principle: signals are inputs, people are targets
+
+  Stem embeddings, MFCC timbre, Spotify features, genre probabilities and
+  release year are all model INPUTS. Their weights are fit to targets that
+  come from people. Mixing a model input into the label would grade the
+  model on agreeing with itself. Each target is reported separately, never
+  averaged into one number.
+
+9.2 Targets
+
+  T1 Perceptual - MagnaTagATune "odd one out" (TagATune bonus game):
+     346 unique triplets, ~7,650 votes, 1,019 clips (audio: 3 x 1 GB zip,
+     32 kbps MP3). Majority outlier c of (a, b, c) gives two constraints:
+     sim(a,b) > sim(a,c) and sim(a,b) > sim(b,c), weighted by vote margin.
+     Caveats: low bitrate hurts separation; agreement is often weak.
+  T2 Behavioral - Last.fm track.getSimilar, fetched live per seed track
+     (LASTFM_API_KEY in .env). The match score gives graded relevance, so the
+     model's neighbor ranking is scored with nDCG@k / AUC. It measures what
+     people listen to together, not purely what sounds alike.
+  T3 (optional) Perceptual pairs - CCMSim (github.com/pxaris/CCMSim): 1,130
+     pairs rated for overall similarity, about 1 rating each, mostly
+     non-Western. Use the MagnaTagATune/FMA (Western) subset, scored with
+     Spearman correlation.
+  Not used: AIME (disco-eth/AIME, 62 GB). Its 15,600 human judgments are
+     pairwise music-quality and text-audio-alignment preferences between
+     mostly AI-generated tracks. No reference song, so no similarity signal.
+  Controlled checks: the author's one-shot sample library (kicks, basses...)
+     or NSynth / FSD50K. Stem embeddings should group same-type sounds, and a
+     sample planted in two different loops should link them on that stem.
+
+9.3 Stages - each a separate, resumable process
+
+  All stages share one registry (SQLite, WAL mode: concurrent readers plus
+  one writer per stage). Each stage processes only rows that are ready
+  (inputs exist) and not yet done (its output is missing). It writes its
+  output, marks the row, and can be killed or restarted at any time. No
+  stage waits for another to finish everything, so network, GPU and CPU
+  work overlap, and evaluation runs on whatever subset is complete.
+
+  stage            resource          input -> output
+  S1 ingest        CPU, once         TidyTuesday catalog + MTAT metadata -> registry rows
+  S2 lastfm        network ~4 req/s  seed tracks -> similar lists (raw JSON per seed);
+                                     new similar tracks registered (depth 1, capped)
+  S3 audio         network 50 req/5s tracks without audio -> Deezer 30 s preview
+                                     (MTAT: extracted from its zip instead)
+  S4 separate      GPU               audio -> 4 stems + mix, excerpt windows (OGG)
+  S5 embed         GPU               stems -> MuQ-MuLan (later CLAP) vectors, keyed by
+                                     (model, window) - adding a model never re-separates
+  S5b timbre       CPU               stems -> MFCC / RMS / onset stats, silence flags
+  S6 targets       CPU               T1/T2/T3 -> triplets/pairs among embedded tracks
+  S7 fit/evaluate  CPU               targets + vectors -> stem weights, per-target report,
+                                     runs logged to MLflow (local)
+
+  Rate limits, retries and caches live inside each stage. A Last.fm or Deezer
+  outage stalls only that stage, never the GPU.
+
+9.4 Budget (estimates, measured as each stage runs)
+
+  Last.fm   25.6k seeds at ~4 req/s                ~2 h
+  Deezer    ~25k previews                          ~3-4 h, ~13 GB
+  GPU       Demucs ~0.9 s + MuQ ~0.2 s per track   ~8 h for 25.6k (the pilot's
+            2.9 s/song included CPU work that now moves to S5b)
+  Stems     excerpt OGGs                           ~10 GB
+  MTAT      3 GB download, 1,019 clips             < 1 h
+  The audio root is configurable, so bulk audio can live on D:.
+
+======================================================================
+SOURCES
+======================================================================
+  Vohra & Akama 2026            https://arxiv.org/abs/2601.19109
+  Berenzweig, Logan, Ellis,
+    Whitman (ISMIR 2003)        https://www.ee.columbia.edu/~dpwe/pubs/ismir03-sim.pdf
+  McFee, Barrington, Lanckriet  https://arxiv.org/abs/1105.2344
+  van den Oord et al. 2013      https://papers.nips.cc/paper/5004-deep-content-based-music-recommendation
+  Panda et al. SMC 2021         https://eden.dei.uc.pt/~ruipedro/publications/Conferences/SMC_2021_Panda.pdf
+  Source-separation bake-off    https://arxiv.org/html/2507.06917v3
+  Stem retrieval (JEPA)         https://arxiv.org/pdf/2411.19806
+  MoisesDB (ISMIR 2023)         https://archives.ismir.net/ismir2023/paper/000073.pdf
+  MagnaTagATune                 https://mirg.city.ac.uk/datasets/magnatagatune/index1.html
+  Wolff - Spot the odd song out https://openaccess.city.ac.uk/id/eprint/5916/
+  CCMSim (TISMIR)               https://transactions.ismir.net/articles/10.5334/tismir.341
+  AIME / AIME-survey            https://huggingface.co/datasets/disco-eth/AIME
+  MSD Last.fm dataset           https://auditory.org/postings/2011/794.html

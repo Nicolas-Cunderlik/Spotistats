@@ -1,26 +1,30 @@
-# Ignore sensitive information
-venv/
+# Secrets (copy .env.example to .env)
+.env
 auth.env
 
-#Ignore Python bytecode
+# Virtual environments
+.venv/
+venv/
+
+# Python bytecode / packaging
 __pycache__/
 *.pyc
+*.egg-info/
 
-#Ignore Build and distribution directories
+# PyInstaller output
 build/
 dist/
 
-# Ignore Cache files
-*.cache
+# Downloaded dataset and trained models (regenerable: python -m spotistats.ml.download_dataset / .train)
+data/
+models/
 
-# Ignore font file
+# Optional title font (licensed separately)
 *.ttf
 
-# Ignore ML dataset and trained artifacts (regenerable via download_dataset.py / train.py)
-spotistats/ml/data/*.csv
-spotistats/ml/artifacts/
-# Ignore logs (may contain request details)
+# Logs and caches - the app writes these to %LOCALAPPDATA%\Spotistats, but
+# older versions wrote them into the repo
 *.log
-
-# Ignore runtime caches (regenerable)
+*.cache
+.cache
 cache/
