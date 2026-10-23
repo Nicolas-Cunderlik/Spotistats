@@ -12,6 +12,8 @@ datasets/__init__.py; nothing downstream changes.
 """
 
 import http.client
+import json
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -89,6 +91,8 @@ def download(url, path, chunk_bytes=1 << 20, progress=None, attempts=8):
                         done += len(chunk)
                         if progress:
                             progress(done, total)
+                    out.flush()
+                    os.fsync(out.fileno())  # on disk before the rename (see write_json_atomic)
             if not total or done >= total:
                 tmp.replace(path)
                 return path
@@ -101,3 +105,16 @@ def download(url, path, chunk_bytes=1 << 20, progress=None, attempts=8):
             pass
         time.sleep(min(60, 2**attempt))
     raise ConnectionError(f"Download still incomplete after {attempts} attempts (re-run to resume): {url}")
+
+
+def write_json_atomic(path, obj):
+    """Writes JSON so a crash, kill or sleep mid-write never leaves a broken
+    file under the final name: write a temp file, force it to disk, rename.
+    (Without the fsync, Windows can record the file's size but not its
+    contents - the Last.fm cache once held 66 zero-filled files after the PC slept.)"""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(path)

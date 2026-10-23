@@ -6,9 +6,13 @@
   python -m stemsim ingest ccmsim [--all-cultures]
   python -m stemsim ingest lastfm [--limit 500]      crawl 500 more seeds, then re-normalize
   python -m stemsim audio [--source deezer] [--dataset lastfm] [--limit 1000]
+  python -m stemsim separate [--dataset dim_sim] [--limit 100]   Demucs stems (GPU)
+  python -m stemsim embed [--dataset dim_sim] [--limit 100]      MuQ-MuLan vectors (GPU)
   python -m stemsim status                           per-dataset progress
 
-Every command is safe to re-run and to run alongside the others.
+Every command is safe to re-run and to run alongside the others; a second
+copy of the same stage refuses to start. GPU stages without --dataset work
+through datasets in PRIORITY order, so evaluation data is ready first.
 """
 
 import argparse
@@ -20,6 +24,9 @@ from .datasets import ADAPTERS
 from .registry import Registry
 from .stages import audio, ingest
 
+# Perceptual targets first (they gate training/evaluation), the candidate pool last
+PRIORITY = ("listener_abx", "magnatagatune", "ccmsim", "dim_sim", "matcha", "spotify_catalog", "lastfm")
+
 _last_reported = [0]
 
 
@@ -30,6 +37,19 @@ def _progress(done, total):
     if done - _last_reported[0] >= 256 << 20 or done == total:
         _last_reported[0] = done
         print(f"  {done / 1e9:.2f} / {total / 1e9:.2f} GB", flush=True)
+
+
+def _run_by_priority(registry, stage_run, dataset, limit):
+    """Runs a stage on one dataset, or on every dataset in PRIORITY order."""
+    totals = {}
+    for name in [dataset] if dataset else PRIORITY:
+        remaining = None if limit is None else limit - sum(totals.values())
+        if remaining is not None and remaining <= 0:
+            break
+        for state, n in stage_run(registry, dataset=name, limit=remaining).items():
+            totals[state] = totals.get(state, 0) + n
+        logging.getLogger(__name__).info("%s: %s", name, totals)
+    return totals
 
 
 def main(argv=None):
@@ -46,6 +66,10 @@ def main(argv=None):
     p.add_argument("--source")
     p.add_argument("--dataset")
     p.add_argument("--limit", type=int)
+    for name, help_text in (("separate", "Demucs stems for tracks with audio"), ("embed", "MuQ-MuLan vectors")):
+        p = commands.add_parser(name, help=help_text)
+        p.add_argument("--dataset", choices=sorted(ADAPTERS))
+        p.add_argument("--limit", type=int)
     commands.add_parser("status", help="per-dataset progress")
     args = parser.parse_args(argv)
 
@@ -75,17 +99,24 @@ def main(argv=None):
             for source in sources:
                 locks.enter_context(registry.exclusive(f"audio-{source}"))
             print(audio.run(registry, source=args.source, dataset=args.dataset, limit=args.limit))
+    elif args.command in ("separate", "embed"):
+        # torch/demucs/muq are imported only here - the rest of the CLI runs without them
+        if args.command == "separate":
+            from .stages import separate as stage
+        else:
+            from .stages import embed as stage
+        with registry.exclusive(stage.STAGE.replace(":", "-")):
+            print(_run_by_priority(registry, stage.run, args.dataset, args.limit))
     elif args.command == "status":
+        stages = ["audio", "separate", "embed:muq-mulan-large"]
         print(
-            f"{'dataset':16s} {'target':11s} {'metric':18s} {'tracks':>7s} {'judgm.':>7s} "
-            f"{'audio ok':>9s} {'failed':>7s} {'unavail.':>9s}"
+            f"{'dataset':16s} {'target':11s} {'tracks':>7s} {'judgm.':>7s} "
+            + " ".join(f"{s[:12]:>18s}" for s in stages)
         )
-        for row in registry.summary():
-            print(
-                f"{row['name']:16s} {row['target']:11s} {row['metric'] or '-':18s} {row['n_tracks']:7d} "
-                f"{row['n_judgments']:7d} {row['audio_done'] or 0:9d} {row['audio_failed'] or 0:7d} "
-                f"{row['audio_unavailable'] or 0:9d}"
-            )
+        print(f"{'':45s}" + " ".join(f"{'ok / fail / n.a.':>18s}" for _ in stages))
+        for row, by_stage in registry.summary(stages):
+            cells = " ".join(f"{c['done']:>8d}/{c['failed']:>4d}/{c['unavailable']:>4d}" for c in by_stage.values())
+            print(f"{row['name']:16s} {row['target']:11s} {row['n_tracks']:7d} {row['n_judgments']:7d} {cells}")
     return 0
 
 

@@ -2,6 +2,23 @@
 
 PyQt5 desktop panel (Windows-only) docked beside the Spotify app. For the current track it shows the album cover, LLM chord progressions (exported as MIDI) and kNN similar tracks. README.md covers setup; this file covers how to work in the code.
 
+## Working agreement (read first)
+
+The owner steers this project and wants to understand it deeply, not to have it built fast. Default to **propose, explain, wait**: describe the options, the trade-offs and your recommendation, then let the owner decide. Smaller steps, each explained, beat large batches of unreviewed change.
+
+**Ask before doing any of these**, even when the next step seems obvious:
+- Design and architecture: new modules, stages, packages or scripts; schema or data-format changes; storage policy; choosing between approaches.
+- Experiment design: which datasets fit vs. stay held out, metrics, baselines, hyperparameters, what counts as success.
+- Dependencies and tools: installing, upgrading or removing packages, in any venv.
+- Long-running or costly work: starting, stopping or restarting pipeline jobs, GPU runs, crawls or downloads, or anything taking more than a few minutes or ~1 GB of disk.
+- Deleting or overwriting data (registry rows, raw files, audio, stems, embeddings), even to repair corruption. Report the problem and propose the repair.
+- Anything outside the repo: GitHub issues, comments or closing them, pushes, external API use beyond agreed limits.
+- Changes beyond what was asked ("while I was there" fixes): list them as suggestions instead.
+
+**Fine without asking:** reading code, data and logs; read-only status checks; running tests and linters; making exactly the change requested, within its stated scope; fixing a lint or test failure introduced by that change.
+
+**When something unexpected happens** (a crash, a surprising result, a data problem): stop, explain what happened and why, and propose next steps. Don't fix it silently, especially if the fix touches anything in the "ask first" list.
+
 ## Commands
 
 | Task | Command |
@@ -13,6 +30,12 @@ PyQt5 desktop panel (Windows-only) docked beside the Spotify app. For the curren
 | Train similarity model | `python -m spotistats.ml.download_dataset` then `python -m spotistats.ml.train` |
 | Compare model variants | `python -m spotistats.ml.evaluate` |
 | Build exe | `pyinstaller app.spec`, then `dist\Spotistats.exe --self-test` |
+| Run CI checks locally | `python scripts/run_checks.py` |
+| Research pipeline overview | `python scripts/pipeline_status.py` |
+| Restart pipeline stages (background, no duplicates) | `python scripts/resume_pipeline.py [--gpu \| --audio \| --dry-run]` |
+| MLflow UI / ABX rating app | `python scripts/launch_mlflow.py` / `python scripts/launch_rating_server.py` |
+
+`scripts/` are standard-library launchers: run them with any Python, they find the right venv themselves.
 
 Use the project venv (`.venv\Scripts\python`), where the package is installed editable (`pip install -e ".[dev]"`). Code lives in `src/spotistats/`; module paths below are relative to it. `research/stem_similarity/` has its own venv (`research/stem_similarity/.venv`, torch + Demucs + MuQ).
 

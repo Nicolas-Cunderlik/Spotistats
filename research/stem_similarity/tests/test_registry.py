@@ -52,3 +52,26 @@ def test_exclusive_refuses_a_second_holder(registry):
             pass
     with registry.exclusive("audio-deezer"):  # released on exit
         pass
+
+
+def test_stage_inputs_outputs_and_windows(registry):
+    tracks = [Track("mtat:a", "mtat"), Track("mtat:b", "mtat")]
+    perceptual = FakeAdapter("rated")
+    seeds = FakeAdapter("pool")
+    seeds.target = "seeds"
+    registry.replace_dataset(
+        perceptual,
+        NormalizedDataset(tracks=tracks, members=[Membership("mtat:a", "1", 10.0, 20.0), Membership("mtat:b", "2")]),
+    )
+    registry.replace_dataset(seeds, NormalizedDataset(members=[Membership("mtat:a", "x", 4.0, 24.0)]))
+
+    # only tracks whose required stage is done are offered to the next stage
+    registry.set_status("mtat:a", "audio", DONE, artifact=r"audio\mtat\a.mp3")  # stored Windows-style
+    assert [r["track_id"] for r in registry.pending("separate", requires="audio")] == ["mtat:a"]
+
+    path, _ = registry.output("mtat:a", "audio")
+    assert path == registry.data_dir / "audio" / "mtat" / "a.mp3"
+    assert registry.output("mtat:b", "audio") is None
+
+    assert registry.clip_windows("mtat:a") == [(4.0, 24.0), (10.0, 20.0)]  # every dataset's judged excerpt
+    assert registry.keeps_stems("rated") and not registry.keeps_stems("pool")

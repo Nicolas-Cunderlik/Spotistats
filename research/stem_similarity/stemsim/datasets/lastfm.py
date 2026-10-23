@@ -26,7 +26,7 @@ from spotistats.ml import dedup
 from spotistats.secrets import get_secret
 
 from ..schema import BEHAVIORAL, NDCG, PAIR, Judgment, Membership, NormalizedDataset, song_track, song_track_id
-from .base import DatasetAdapter, RateLimiter, http_get
+from .base import DatasetAdapter, RateLimiter, http_get, write_json_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ class LastFm(DatasetAdapter):
                 "not_found": error == NOT_FOUND,
                 "similar": similar,
             }
-            (raw / _cache_name(seed["track_id"])).write_text(json.dumps(record), encoding="utf-8")
+            write_json_atomic(raw / _cache_name(seed["track_id"]), record)
             fetched += 1
         logger.info("Last.fm: fetched %d seeds this run, %d still to go", fetched, max(0, len(todo) - fetched))
         return fetched
@@ -127,7 +127,13 @@ class LastFm(DatasetAdapter):
         tracks, members = {}, {}
         best = {}  # (seed, similar) -> match; versions of one song collapse to its best score
         for path in sorted(registry.raw_dir(self.name).glob("*.json")):
-            record = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                # Can't happen for new files (atomic writes); older ones can be
+                # damaged by a crash. Delete it and the next fetch refetches it.
+                logger.warning("Unreadable Last.fm cache file %s - delete it and re-run fetch", path.name)
+                continue
             seed_id = record["seed"]
             for item in record["similar"]:
                 artist = item.get("artist", {}).get("name")

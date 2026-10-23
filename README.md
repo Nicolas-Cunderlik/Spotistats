@@ -67,6 +67,18 @@ Put the `.env` next to the exe; secrets are never bundled.
 - `python -m spotistats.ml.evaluate` compares similarity-model variants.
 - Dependencies are pinned in `pyproject.toml` (`dev` extra for tooling).
 
+### Utility scripts
+
+Run with any Python - each finds the right virtualenv itself:
+
+| Script | What it does |
+|---|---|
+| `scripts/run_checks.py` | What CI runs: pre-commit over all files + both test suites |
+| `scripts/pipeline_status.py` | Research pipeline progress per dataset and stage, what's running, disk, latest log lines |
+| `scripts/resume_pipeline.py` | Restarts downloads / GPU stages in the background; skips stages already running |
+| `scripts/launch_mlflow.py` | MLflow UI over the research experiment runs |
+| `scripts/launch_rating_server.py` | The ABX rating app for adding your own similarity judgments |
+
 ## Project layout
 
 ```

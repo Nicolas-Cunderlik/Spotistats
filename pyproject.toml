@@ -57,6 +57,8 @@ select = ["E", "W", "F", "I", "B", "UP", "S"]
 # random sampling for experiment design (not cryptography)
 "research/**" = ["S310", "S311", "S603"]
 "research/**/tests/**" = ["S101"]
+# Utility scripts launch fixed commands (venv python, git, mlflow) by design
+"scripts/**" = ["S603", "S607"]
 
 [tool.ruff.format]
 quote-style = "preserve"  # the codebase mixes quote styles; don't churn every line

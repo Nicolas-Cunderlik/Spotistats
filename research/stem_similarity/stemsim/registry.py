@@ -168,14 +168,19 @@ class Registry:
 
     # --- stage bookkeeping --------------------------------------------------
 
-    def pending(self, stage, audio_source=None, dataset=None, retry_failed=True, limit=None):
-        """Tracks with no final outcome for `stage` yet."""
+    def pending(self, stage, audio_source=None, dataset=None, retry_failed=True, limit=None, requires=None):
+        """Tracks with no final outcome for `stage` yet - and, with `requires`,
+        only those whose `requires` stage is done (its output is the input)."""
         final = (DONE, UNAVAILABLE) if retry_failed else (DONE, UNAVAILABLE, FAILED)
         placeholders = ",".join("?" * len(final))
         sql = f"""SELECT t.* FROM tracks t
                   WHERE NOT EXISTS (SELECT 1 FROM stage_status s WHERE s.track_id = t.track_id
                                     AND s.stage = ? AND s.state IN ({placeholders}))"""  # noqa: S608 - placeholders only
         args = [stage, *final]
+        if requires:
+            sql += """ AND EXISTS (SELECT 1 FROM stage_status r WHERE r.track_id = t.track_id
+                                   AND r.stage = ? AND r.state = 'done')"""
+            args.append(requires)
         if audio_source:
             sql += " AND t.audio_source = ?"
             args.append(audio_source)
@@ -188,6 +193,31 @@ class Registry:
             args.append(limit)
         return self.conn.execute(sql, args).fetchall()
 
+    def output(self, track_id, stage):
+        """(path, detail) of a finished stage's output for a track, or None.
+        Artifacts are stored relative to the data dir (backslashes on Windows)."""
+        row = self.conn.execute(
+            "SELECT artifact, detail FROM stage_status WHERE track_id = ? AND stage = ? AND state = 'done'",
+            (track_id, stage),
+        ).fetchone()
+        if row is None or row["artifact"] is None:
+            return None
+        return self.data_dir / Path(row["artifact"].replace("\\", "/")), row["detail"]
+
+    def keeps_stems(self, dataset):
+        """Stems stay on disk for perceptual datasets (see stages/separate.py)."""
+        row = self.conn.execute("SELECT target FROM datasets WHERE name = ?", (dataset,)).fetchone()
+        return row is not None and row["target"] == "perceptual"
+
+    def clip_windows(self, track_id):
+        """The excerpts (start, end) seconds that any dataset's listeners judged for this track."""
+        rows = self.conn.execute(
+            """SELECT DISTINCT clip_start, clip_end FROM memberships
+               WHERE track_id = ? AND clip_start IS NOT NULL AND clip_end IS NOT NULL""",
+            (track_id,),
+        ).fetchall()
+        return sorted((row["clip_start"], row["clip_end"]) for row in rows)
+
     def set_status(self, track_id, stage, state, detail=None, artifact=None):
         with self.transaction() as db:
             db.execute(
@@ -195,17 +225,32 @@ class Registry:
                 (track_id, stage, state, detail, artifact, time.time()),
             )
 
-    def summary(self):
-        """Per dataset: tracks, judgments, and how far each stage has got."""
-        return self.conn.execute(
-            """SELECT d.name, d.target, d.metric, d.n_tracks, d.n_judgments,
-                      SUM(s.state = 'done') AS audio_done, SUM(s.state = 'failed') AS audio_failed,
-                      SUM(s.state = 'unavailable') AS audio_unavailable
-               FROM datasets d
-               JOIN memberships m ON m.dataset = d.name
-               LEFT JOIN stage_status s ON s.track_id = m.track_id AND s.stage = 'audio'
-               GROUP BY d.name ORDER BY d.name"""
+    def summary(self, stages):
+        """Per dataset: target, metric, tracks, judgments, then for each of
+        `stages` how many of its tracks are done / failed / unavailable."""
+        datasets = self.conn.execute(
+            "SELECT name, target, metric, n_tracks, n_judgments FROM datasets ORDER BY name"
         ).fetchall()
+        counts = {
+            (row["dataset"], row["stage"], row["state"]): row["n"]
+            for row in self.conn.execute(
+                f"""SELECT m.dataset, s.stage, s.state, COUNT(*) AS n
+                    FROM memberships m JOIN stage_status s ON s.track_id = m.track_id
+                    WHERE s.stage IN ({",".join("?" * len(stages))})
+                    GROUP BY m.dataset, s.stage, s.state""",  # noqa: S608 - placeholders only
+                list(stages),
+            )
+        }
+        return [
+            (
+                dict(row),
+                {
+                    stage: {state: counts.get((row["name"], stage, state), 0) for state in (DONE, FAILED, UNAVAILABLE)}
+                    for stage in stages
+                },
+            )
+            for row in datasets
+        ]
 
 
 if sys.platform == "win32":
